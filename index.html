@@ -27,60 +27,89 @@
     </button>
   </header>
 
-  <!-- ══════════ Экран: карусель уровней ══════════ -->
-  <section class="screen" id="screen-levels">
-    <div class="carousel" id="carousel">
-      <div class="car-track" id="carTrack"><!-- карточки генерируются из data --></div>
-    </div>
-    <div class="dots" id="carDots"></div>
-  </section>
-
-  <!-- ══════════ Экран: игроки ══════════ -->
-  <section class="screen screen-solid" id="screen-setup">
+  <!-- ══════════ Экран 1: игроки ══════════ -->
+  <section class="screen screen-solid" id="screen-players">
     <h2 class="setup-title">Игроки</h2>
-    <p class="setup-sub">Минимум 2 игрока. Имена появятся на колесе.</p>
+    <p class="setup-sub">Впишите имена — минимум 2, максимум 12. Они появятся на колесе.</p>
     <div id="playerList" class="player-list"></div>
     <button class="ghost-btn" id="addPlayerBtn">＋ Добавить игрока</button>
     <div class="setup-actions">
-      <button class="back-link" id="setupBackBtn">← Назад</button>
-      <button class="play-btn small" id="setupSaveBtn"><span>Играть</span><i class="chev">›</i></button>
+      <button class="play-btn big" id="setupSaveBtn"><span>Дальше</span><i class="chev">›</i></button>
     </div>
   </section>
 
-  <!-- ══════════ Экран: колесо ══════════ -->
+  <!-- ══════════ Экран 2: уровни ══════════ -->
+  <section class="screen" id="screen-levels">
+    <div class="carousel" id="carousel">
+      <div class="car-track" id="carTrack"><!-- карточки из data --></div>
+    </div>
+    <div class="dots-row">
+      <button class="dot-arrow" id="prevLv" aria-label="Предыдущий">‹</button>
+      <div class="dots" id="carDots"></div>
+      <button class="dot-arrow" id="nextLv" aria-label="Следующий">›</button>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 3: колесо ══════════ -->
   <section class="screen screen-wheel" id="screen-wheel">
     <div class="wheel-bg">
       <div class="stripe s1"></div>
       <div class="stripe s2"></div>
       <div class="stripe s3"></div>
     </div>
+    <button class="corner-back" id="backToLevels" aria-label="К выбору уровня">←</button>
     <button class="spin-big-btn" id="spinBtn" aria-label="Запустить колесо">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/>
+        <path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>
       </svg>
     </button>
-    <p class="wheel-caption">Запустите колесо!</p>
+    <p class="wheel-caption">Смахни или нажми!</p>
   </section>
 
-  <!-- ══════════ Экран: задание ══════════ -->
+  <!-- ══════════ Экран 4: выбор правда/действие ══════════ -->
+  <section class="screen screen-choice" id="screen-choice">
+    <div class="choice-inner">
+      <p class="choice-hint">Выбывает</p>
+      <h1 class="choice-name" id="choiceName">—</h1>
+      <div class="choice-divider"></div>
+      <p class="choice-sub">Выбирай, что больше по душе:</p>
+      <div class="choice-cards">
+        <button class="choice-card truth" id="choiceTruth">
+          <span class="cc-type">правда</span>
+          <span class="cc-text" id="truthPreview"></span>
+          <span class="cc-lock hidden" id="truthLock">🚫 уже 2 раза подряд</span>
+        </button>
+        <button class="choice-card action" id="choiceAction">
+          <span class="cc-type">действие</span>
+          <span class="cc-text" id="actionPreview"></span>
+          <span class="cc-lock hidden" id="actionLock">🚫 уже 2 раза подряд</span>
+        </button>
+      </div>
+      <button class="back-link" id="choiceBackBtn">← к колесу</button>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 5: задание ══════════ -->
   <section class="screen screen-reveal" id="screen-reveal">
     <div class="reveal-inner">
       <h1 class="reveal-type" id="revealType">действие</h1>
       <div class="reveal-divider"></div>
       <p class="reveal-text" id="revealText"></p>
     </div>
-    <button class="done-btn" id="doneBtn">Готово! Крутим дальше ›</button>
-    <aside class="side-panel">
-      <div class="panel-card timer-card" id="timerCard" title="Время на выполнение">
-        <div class="timer-track"><div class="timer-fill" id="timerFill"></div></div>
-      </div>
-      <div class="panel-card">
+    <div class="fail-banner hidden" id="failBanner">⏱ Время вышло — <b>пей стопку!</b> 🥃</div>
+    <div class="bottom-panel">
+      <div class="timer-row">
+        <svg class="clock-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg>
+        <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
+        <span class="timer-secs" id="timerSecs">60</span>
         <button class="panel-btn" id="soundBtn" aria-label="Звук">
           <svg id="soundOnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
           <svg id="soundOffIcon" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m16 9 6 6"/><path d="m22 9-6 6"/></svg>
         </button>
       </div>
-    </aside>
+      <p class="punish-note">Не выполнил или не успел — <b>пей стопку</b> 🥃</p>
+      <button class="done-btn" id="doneBtn">Готово! Крутим дальше ›</button>
+    </div>
   </section>
 
   <!-- ══════════ Оверлей: спин колеса ══════════ -->
@@ -106,9 +135,6 @@
       </button>
       <button class="set-row set-btn" id="setSoundBtn">
         <span>Звук</span><b id="setSoundState">Вкл</b>
-      </button>
-      <button class="set-row set-btn" id="setMenuBtn">
-        <span>К выбору уровня</span>
       </button>
       <p class="set-foot">Домашняя реплика «Фантов» для своих. Некоммерческая 💙</p>
       <button class="modal-close" id="settingsCloseBtn">Закрыть</button>
