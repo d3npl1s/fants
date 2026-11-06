@@ -573,18 +573,20 @@
       state.remaining = state.remaining.filter(p => p !== name);
       store.set('remaining', state.remaining);
       if (!state.remaining.length) {
+        const finishedRound = state.round;
         state.round += 1;
         state.remaining = [...state.players];
         store.set('round', state.round);
         store.set('remaining', state.remaining);
         renderHud();
         store.set('stats', state.stats);
-        renderStats('Круг ' + (state.round - 1) + ' завершён');
+        // сводка не на каждом круге, чтобы не надоедала: каждый 3-й
+        if (finishedRound % 3 === 0) renderStats('Круг ' + finishedRound + ' завершён');
         startBlitzClock();
         showScreen('screen-wheel');
         return;
       }
-      toast(name + ' выбывает до следующего круга. Осталось: ' + state.remaining.length);
+      toast(name + ' выпадает до следующего круга. Осталось: ' + state.remaining.length);
     } else {
       state.stats[name].fails++;
       store.set('stats', state.stats);
