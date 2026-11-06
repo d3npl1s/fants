@@ -462,7 +462,6 @@
 
   $('#choiceTruth').addEventListener('click', () => choose('truth'));
   $('#choiceAction').addEventListener('click', () => choose('action'));
-  $('#choiceBackBtn').addEventListener('click', () => showScreen('screen-wheel'));
 
   function choose(type) {
     if (!pending) return;

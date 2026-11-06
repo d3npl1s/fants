@@ -171,6 +171,10 @@ body {
 
 /* ── Карусель уровней ── */
 #screen-levels.active { display: flex; flex-direction: column; }
+/* у каждой карточки своя палитра — фон меняется при свайпе */
+.level-card[data-lv="fun"]  { --c1: #56b7e8; --c2: #1c6fc0; --l-accent: #2b7bc9; }
+.level-card[data-lv="soft"] { --c1: #ff5a45; --c2: #ffc53d; --l-accent: #ff7a3d; }
+.level-card[data-lv="hot"]  { --c1: #ff2e78; --c2: #a10f55; --l-accent: #d81b60; }
 .carousel {
   flex: 1; overflow-x: auto; overflow-y: hidden;
   scroll-snap-type: x mandatory;
@@ -218,10 +222,11 @@ body {
 
 .corner-back {
   position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); left: 16px;
-  width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
-  background: var(--navy); color: #fff; font-size: 26px; z-index: 6;
+  width: 52px; height: 52px; border: none; border-radius: 14px; cursor: pointer;
+  background: var(--navy); color: #fff; z-index: 6;
   box-shadow: var(--shadow); display: grid; place-items: center;
 }
+.corner-back svg { width: 26px; height: 26px; }
 .corner-back:active { transform: scale(.92); }
 
 .wheel-hud {
