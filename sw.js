@@ -1,9 +1,12 @@
 /* Фанты — офлайн-кеш */
-const CACHE = 'fant-v2';
+const CACHE = 'fant-v3';
 const ASSETS = [
   './', './index.html',
   './css/style.css', './js/data.js', './js/app.js',
-  './manifest.webmanifest', './icon.svg'
+  './manifest.webmanifest', './icon.svg',
+  './fonts/montserrat-500-cyrillic.woff2', './fonts/montserrat-500-latin.woff2',
+  './fonts/montserrat-700-cyrillic.woff2', './fonts/montserrat-700-latin.woff2',
+  './fonts/montserrat-800-cyrillic.woff2', './fonts/montserrat-800-latin.woff2'
 ];
 
 self.addEventListener('install', e => {

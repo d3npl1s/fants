@@ -237,18 +237,20 @@
       if (idx !== lastIdx) { lastIdx = idx; tickSound(); }
       track.style.transform = `translate(-50%, calc(-50% + ${y}px))`;
       if (t < 1) requestAnimationFrame(frame);
-      else finishSpin(winIdx);
+      else finishSpin(winIdx, chosenIdx);
     }
     requestAnimationFrame(frame);
   }
 
-  function finishSpin(winIdx) {
+  function finishSpin(winIdx, chosenIdx) {
     const winner = document.querySelector(`.spin-name[data-i="${winIdx}"]`);
     if (winner) winner.classList.add('win');
     vibrate([60, 60, 140]);
+    // победитель колеса — единственный источник имени для экрана выбора
+    const winnerName = state.players[chosenIdx];
     setTimeout(() => {
       $('#spinOverlay').classList.add('hidden');
-      openChoice();
+      openChoice(winnerName);
       state.spinning = false;
     }, 700);
   }
@@ -256,8 +258,7 @@
   /* ══════════ Экран 4: выбор правда / действие ══════════ */
   let pending = null;   // { name, truth, action }
 
-  function openChoice() {
-    const name = state.players[Math.floor(Math.random() * state.players.length)];
+  function openChoice(name) {
     pending = {
       name,
       truth: drawTask(state.level, 'truth'),
@@ -390,7 +391,7 @@
     state.sound = !state.sound; store.set('sound', state.sound); syncSoundIcons();
   });
 
-  $('#crownBtn').addEventListener('click', () => toast('👑 Премиум здесь не нужен — всё и так бесплатно'));
+  $('#crownBtn').addEventListener('click', () => toast('Премиум здесь не нужен — всё и так бесплатно'));
 
   /* ── Старт: всегда с игроков ── */
   buildCarousel();
