@@ -38,8 +38,23 @@
     </div>
   </section>
 
-  <!-- ══════════ Экран 2: уровни ══════════ -->
+  <!-- ══════════ Экран 2: выбор игры ══════════ -->
+  <section class="screen" id="screen-games">
+    <div class="carousel" id="gamesCarousel">
+      <div class="car-track" id="gamesTrack"></div>
+    </div>
+    <div class="dots-row">
+      <button class="dot-arrow" id="prevGame" aria-label="Предыдущая">‹</button>
+      <div class="dots" id="gamesDots"></div>
+      <button class="dot-arrow" id="nextGame" aria-label="Следующая">›</button>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 3а: уровни фантов ══════════ -->
   <section class="screen" id="screen-levels">
+    <button class="corner-back" id="backToGames" aria-label="К выбору игры">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
     <div class="carousel" id="carousel">
       <div class="car-track" id="carTrack"><!-- карточки из data --></div>
     </div>
@@ -47,6 +62,102 @@
       <button class="dot-arrow" id="prevLv" aria-label="Предыдущий">‹</button>
       <div class="dots" id="carDots"></div>
       <button class="dot-arrow" id="nextLv" aria-label="Следующий">›</button>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 3б: настройки «Продолжи фразу» ══════════ -->
+  <section class="screen screen-phrase-setup" id="screen-phrase-setup">
+    <button class="corner-back" id="phraseBackBtn" aria-label="К выбору игры">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="phrase-setup-inner">
+      <h2 class="setup-title">Продолжи фразу</h2>
+      <p class="setup-sub">Один зачитывает начало — второй отвечает неправильно, но уверенно. Общий зал ставит оценку.</p>
+
+      <div class="ph-field important">
+        <label>Вопросов на человека</label>
+        <div class="stepper">
+          <button id="perMinus">−</button>
+          <b id="perValue">5</b>
+          <button id="perPlus">＋</button>
+        </div>
+      </div>
+
+      <div class="ph-field important">
+        <label>Режим вопросов</label>
+        <div class="mode-chips" id="modeChips"></div>
+        <p class="ph-mode-tag" id="modeTag"></p>
+      </div>
+
+      <div class="ph-field">
+        <label>Наказание за последнее место</label>
+        <p class="ph-punish" id="phrasePunish">пей стопку</p>
+      </div>
+
+      <div class="setup-actions">
+        <button class="play-btn big" id="phraseStartBtn"><span>Начать</span><i class="chev">›</i></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 4б: пара читает/отвечает ══════════ -->
+  <section class="screen screen-phrase-round" id="screen-phrase-round">
+    <button class="corner-back" id="phraseRoundBackBtn" aria-label="К настройкам">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="phrase-round-inner">
+      <p class="ph-progress" id="phProgress">Вопрос 1 из 20</p>
+      <div class="pair-cols">
+        <div class="pair-col">
+          <span class="pair-role">ЧИТАЕТ</span>
+          <div class="pair-win"><div class="pair-track" id="colReader"></div></div>
+        </div>
+        <div class="pair-col">
+          <span class="pair-role">ОТВЕЧАЕТ</span>
+          <div class="pair-win"><div class="pair-track" id="colAnswerer"></div></div>
+        </div>
+      </div>
+      <button class="spin-big-btn small" id="pairSpinBtn" aria-label="Выбрать пару">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+      </button>
+      <p class="wheel-caption" id="pairCaption">Выберите пару!</p>
+      <button class="done-btn hidden" id="phraseGoBtn">Фраза! ›</button>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 5б: фраза + оценка ══════════ -->
+  <section class="screen screen-reveal" id="screen-phrase-task">
+    <div class="reveal-inner">
+      <p class="ph-task-meta" id="phTaskMeta"></p>
+      <div class="reveal-divider"></div>
+      <p class="reveal-text" id="phTaskText"></p>
+    </div>
+    <div class="bottom-panel">
+      <button class="done-btn wide" id="phraseRateBtn">Оценить ответ</button>
+      <div class="rate-panel hidden" id="ratePanel">
+        <p class="rate-hint">Оценка общего зала — насколько уверенно?</p>
+        <div class="rate-row">
+          <button class="rate-btn" data-r="1">1</button>
+          <button class="rate-btn" data-r="2">2</button>
+          <button class="rate-btn" data-r="3">3</button>
+          <button class="rate-btn" data-r="4">4</button>
+          <button class="rate-btn" data-r="5">5</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 6б: итоги круга ══════════ -->
+  <section class="screen screen-solid" id="screen-phrase-results">
+    <div class="phrase-setup-inner">
+      <h2 class="setup-title" id="phResultsTitle">Круг завершён</h2>
+      <div id="phResultsTable" class="ph-results"></div>
+      <p class="ph-loser" id="phLoser"></p>
+      <div class="setup-actions ph-actions-col">
+        <button class="play-btn big" id="phraseAgainBtn"><span>Ещё круг</span><i class="chev">›</i></button>
+        <button class="ghost-btn" id="phraseSettingsBtn">Настройки игры</button>
+        <button class="ghost-btn" id="phraseGamesBtn">К выбору игр</button>
+      </div>
     </div>
   </section>
 
@@ -149,15 +260,18 @@
       <button class="set-row set-btn" id="setTtsBtn">
         <span>Озвучка заданий</span><b id="setTtsState">Вкл</b>
       </button>
-      <button class="set-row set-btn" id="setBlitzBtn">
+      <button class="set-row set-btn important" id="setBlitzBtn">
         <span>Блиц-круг (3 минуты на круг)</span><b id="setBlitzState">Выкл</b>
       </button>
-      <div class="set-row punish-edit">
+      <div class="set-row punish-edit important">
         <label for="punishInput">Наказание за провал</label>
         <input id="punishInput" maxlength="60" placeholder="пей стопку">
       </div>
       <button class="set-row set-btn" id="setStatsBtn">
         <span>Статистика</span>
+      </button>
+      <button class="set-row set-btn" id="setGamesBtn">
+        <span>К выбору игры</span>
       </button>
       <p class="set-foot">Домашняя реплика «Фантов» для своих. Некоммерческая</p>
       <button class="modal-close" id="settingsCloseBtn">Закрыть</button>
@@ -189,6 +303,7 @@
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/phrase-data.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

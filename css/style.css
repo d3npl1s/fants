@@ -420,6 +420,12 @@ body {
   background: rgba(255,255,255,.07); border-radius: 14px; padding: 14px 16px;
   font-size: 17px; font-weight: 700;
 }
+/* важные настройки — крупнее и подсвечены */
+.set-row.important {
+  font-size: 18px; padding: 17px 18px;
+  border: 2px solid rgba(255, 209, 102, .55); background: rgba(255, 209, 102, .1);
+}
+.set-row.important b { font-size: 18px; }
 button.set-btn { border: none; color: #fff; cursor: pointer; text-align: left; width: 100%; }
 button.set-btn b { opacity: .85; font-weight: 800; }
 .level-chips { display: flex; gap: 8px; }
@@ -435,6 +441,92 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   border: none; border-radius: 14px; padding: 15px; cursor: pointer;
   background: rgba(255,255,255,.12); color: #fff; font-size: 17px; font-weight: 800;
 }
+
+/* ═══════════ Выбор игры ═══════════ */
+.game-card[data-game="fants"]  { --g1: #56b7e8; --g2: #1c6fc0; }
+.game-card[data-game="phrase"] { --g1: #7b5cff; --g2: #26b5a2; }
+.game-card {
+  min-width: 100%; height: 100%;
+  scroll-snap-align: start; scroll-snap-stop: always;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  gap: 18px; padding: 80px 34px 110px; text-align: center;
+  background: linear-gradient(178deg, var(--g1), var(--g2));
+}
+.game-icon { width: 110px; height: 110px; filter: drop-shadow(0 8px 14px rgba(0,0,0,.2)); }
+.game-name { font-size: 46px; font-weight: 800; text-shadow: 0 5px 0 rgba(0,0,0,.18); }
+.game-tag { font-size: 18px; font-weight: 700; line-height: 1.5; max-width: 320px; text-shadow: 0 2px 6px rgba(0,0,0,.18); }
+.game-card .play-btn { max-width: 300px; margin-top: 10px; }
+
+/* ═══════════ Игра «Продолжи фразу» ═══════════ */
+.screen-phrase-setup { background: linear-gradient(178deg, #7b5cff, #26b5a2); }
+#screen-phrase-results { background: linear-gradient(178deg, #7b5cff, #26b5a2); }
+#screen-phrase-setup.active, #screen-phrase-results.active { display: flex; flex-direction: column; }
+.phrase-setup-inner {
+  flex: 1; overflow-y: auto;
+  padding: calc(env(safe-area-inset-top, 0px) + 86px) 26px calc(env(safe-area-inset-bottom, 0px) + 26px);
+  display: flex; flex-direction: column;
+}
+.ph-field { margin-bottom: 22px; }
+.ph-field > label { display: block; font-size: 16px; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+.ph-field.important > label { font-size: 18px; opacity: 1; }
+.stepper { display: flex; align-items: center; gap: 18px; }
+.stepper button {
+  width: 62px; height: 62px; border: none; border-radius: 16px; cursor: pointer;
+  background: rgba(33,38,92,.85); color: #fff; font-size: 30px; font-weight: 800;
+  box-shadow: var(--shadow); padding-bottom: 4px;
+}
+.stepper button:active { transform: scale(.92); }
+.stepper b { font-size: 44px; font-weight: 800; min-width: 60px; text-align: center; text-shadow: 0 3px 0 rgba(0,0,0,.18); }
+.mode-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.mode-chips button {
+  border: 2px solid rgba(255,255,255,.4); background: rgba(33,38,92,.5); color: #fff;
+  border-radius: 14px; padding: 12px 18px; font-family: inherit; font-size: 16px; font-weight: 800; cursor: pointer;
+}
+.mode-chips button.on { background: #fff; color: #4a2fa0; border-color: #fff; }
+.ph-mode-tag { margin-top: 10px; font-size: 14px; font-weight: 600; opacity: .9; }
+.ph-punish { font-size: 20px; font-weight: 800; }
+.ph-actions-col { flex-direction: column; align-items: stretch; gap: 12px; }
+.ph-actions-col .play-btn { margin: 0 auto; }
+
+.ph-progress { text-align: center; font-size: 17px; font-weight: 800; letter-spacing: 1px; opacity: .9; margin-bottom: 8px; }
+.screen-phrase-round { background: linear-gradient(178deg, #7b5cff, #26b5a2); overflow: hidden; }
+.phrase-round-inner { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding-top: calc(env(safe-area-inset-top, 0px) + 70px); }
+.pair-cols { display: flex; gap: 18px; margin-top: 22px; }
+.pair-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pair-role { font-size: 15px; font-weight: 800; letter-spacing: 3px; opacity: .9; }
+.pair-win {
+  width: 150px; height: 96px; border-radius: 16px; overflow: hidden; position: relative;
+  background: var(--navy); box-shadow: var(--shadow);
+  border: 3px solid rgba(255,255,255,.3);
+}
+.pair-track { position: absolute; left: 0; right: 0; top: 0; will-change: transform; display: flex; flex-direction: column; }
+.pair-item { height: 96px; flex: 0 0 96px; display: grid; place-items: center; font-size: 26px; font-weight: 800; color: #fff; text-align: center; padding: 0 10px; }
+#pairSpinBtn { width: 120px; height: 120px; margin-top: 34px; }
+#pairSpinBtn svg { width: 56px; height: 56px; }
+#phraseGoBtn { position: static; transform: none; margin-top: 26px; }
+
+.ph-task-meta { font-size: 16px; font-weight: 800; letter-spacing: 1px; opacity: .9; text-transform: uppercase; }
+.rate-panel { display: flex; flex-direction: column; gap: 12px; }
+.rate-hint { text-align: center; font-size: 15px; font-weight: 700; opacity: .95; }
+.rate-row { display: flex; gap: 10px; justify-content: center; }
+.rate-btn {
+  flex: 1; max-width: 66px; aspect-ratio: 1; border: none; border-radius: 16px; cursor: pointer;
+  background: var(--white); color: var(--navy); font-family: inherit;
+  font-size: 26px; font-weight: 800; box-shadow: var(--shadow);
+}
+.rate-btn[data-r="5"] { background: #ffd166; }
+.rate-btn:active { transform: scale(.92); }
+.done-btn.wide { width: 100%; }
+
+.ph-results { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.ph-result-row {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,.1); border-radius: 14px; padding: 14px 16px;
+}
+.ph-result-row b { font-size: 18px; font-weight: 800; flex: 1; }
+.ph-result-row .ph-score { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ph-result-row.loser { background: rgba(198, 40, 40, .45); border: 2px solid rgba(255,255,255,.35); }
+.ph-loser { margin-top: 14px; font-size: 17px; font-weight: 700; line-height: 1.5; opacity: .95; }
 
 /* ═══════════ Наказание, блиц, статистика ═══════════ */
 .punish-edit { flex-wrap: wrap; }

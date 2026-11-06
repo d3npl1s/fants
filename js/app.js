@@ -259,9 +259,44 @@
     if (state.players.length < 2) return toast('Нужно минимум 2 игрока');
     store.set('players', state.players);
     resetRounds();
-    showScreen('screen-levels');
-    syncCarousel();
+    showScreen('screen-games');
   });
+
+  /* ══════════ Экран 2: выбор игры ══════════ */
+  const GAME_ICONS = {
+    fants: `<svg class="game-icon" viewBox="0 0 120 120"><rect x="30" y="16" width="60" height="60" rx="14" fill="#fff"/><path d="M44 52 40 26l14 10 6-14 6 14 14-10-4 26z" fill="none" stroke="#21265c" stroke-width="4" stroke-linejoin="round"/><path d="M44 52h32v6c0 5-4 9-9 9H53c-5 0-9-4-9-9z" fill="#21265c"/></svg>`,
+    phrase: `<svg class="game-icon" viewBox="0 0 120 120"><path fill="#fff" d="M18 24c0-6 5-11 11-11h62c6 0 11 5 11 11v40c0 6-5 11-11 11H56L38 94V75H29c-6 0-11-5-11-11z"/><circle cx="43" cy="44" r="5" fill="#26b5a2"/><circle cx="60" cy="44" r="5" fill="#26b5a2"/><circle cx="77" cy="44" r="5" fill="#26b5a2"/><path fill="#fff" opacity=".85" d="M50 96l14-12 18 8c4 2 6 7 4 11s-7 6-11 4z"/></svg>`
+  };
+  const GAMES = [
+    { id: 'fants', name: 'Фанты', tagline: 'Правда или действие: колесо, уровни и задания.' },
+    { id: 'phrase', name: 'Продолжи фразу', tagline: 'Отвечай неправильно, но уверенно. Зал ставит оценку.' }
+  ];
+  function buildGames() {
+    $('#gamesTrack').innerHTML = GAMES.map(g => `
+      <div class="game-card" data-game="${g.id}">
+        ${GAME_ICONS[g.id]}
+        <div class="game-name">${g.name}</div>
+        <p class="game-tag">${g.tagline}</p>
+        <button class="play-btn" data-play="${g.id}"><span>Играть</span><i class="chev">›</i></button>
+      </div>`).join('');
+    $('#gamesDots').innerHTML = GAMES.map((g, i) => `<i data-i="${i}" class="${i === 0 ? 'on' : ''}"></i>`).join('');
+  }
+  function syncGames() {
+    const i = Math.round($('#gamesCarousel').scrollLeft / Math.max(1, $('#gamesCarousel').clientWidth));
+    document.querySelectorAll('#gamesDots i').forEach((d, k) => d.classList.toggle('on', k === i));
+  }
+  $('#gamesCarousel').addEventListener('scroll', syncGames, { passive: true });
+  $('#prevGame').addEventListener('click', () => $('#gamesCarousel').scrollBy({ left: -$('#gamesCarousel').clientWidth, behavior: 'smooth' }));
+  $('#nextGame').addEventListener('click', () => $('#gamesCarousel').scrollBy({ left: $('#gamesCarousel').clientWidth, behavior: 'smooth' }));
+  $('#gamesTrack').addEventListener('click', e => {
+    const b = e.target.closest('[data-play]');
+    if (!b) return;
+    if (b.dataset.play === 'fants') { showScreen('screen-levels'); syncCarousel(); }
+    else { renderModeChips(); showScreen('screen-phrase-setup'); }
+  });
+  $('#backToGames').addEventListener('click', () => showScreen('screen-games'));
+  $('#phraseBackBtn').addEventListener('click', () => showScreen('screen-games'));
+  $('#phraseRoundBackBtn').addEventListener('click', () => { renderModeChips(); showScreen('screen-phrase-setup'); });
 
   /* ══════════ Экран 2: карусель уровней (нативный свайп) ══════════ */
   const ICONS = {
@@ -633,6 +668,149 @@
   /* ── Повтор озвучки ── */
   $('#ttsBtn').addEventListener('click', () => speak(state.currentPlain));
 
+  /* ══════════ Игра «Продолжи фразу» ══════════ */
+  const PHRASE_H = 96;                      // высота имени в столбике, px
+  const phrase = {
+    per: store.get('phPer', 5),
+    mode: store.get('phMode', 'all'),
+    bag: [], usedPairs: [], queue: [], asked: 0,
+    scores: {}, current: null
+  };
+
+  function renderModeChips() {
+    $('#modeChips').innerHTML = window.PHRASE.modes.map(m =>
+      `<button data-mode="${m.id}" class="${m.id === phrase.mode ? 'on' : ''}">${m.name}</button>`).join('');
+    $('#modeTag').textContent = (window.PHRASE.modes.find(m => m.id === phrase.mode) || {}).tagline || '';
+  }
+  $('#modeChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-mode]'); if (!b) return;
+    phrase.mode = b.dataset.mode; store.set('phMode', phrase.mode);
+    renderModeChips();
+  });
+  $('#perMinus').addEventListener('click', () => { phrase.per = Math.max(1, phrase.per - 1); store.set('phPer', phrase.per); $('#perValue').textContent = phrase.per; });
+  $('#perPlus').addEventListener('click', () => { phrase.per = Math.min(10, phrase.per + 1); store.set('phPer', phrase.per); $('#perValue').textContent = phrase.per; });
+
+  function phraseStart() {
+    if (state.players.length < 2) { toast('Нужно минимум 2 игрока'); return; }
+    phrase.bag = []; phrase.usedPairs = []; phrase.asked = 0;
+    phrase.scores = {};
+    state.players.forEach(nm => phrase.scores[nm] = []);
+    // очередь ответов: каждый игрок отвечает per раз, порядок случайный
+    phrase.queue = state.players.flatMap(nm => Array(phrase.per).fill(nm)).sort(() => Math.random() - .5);
+    $('#pairCaption').textContent = 'Выберите пару!';
+    $('#pairSpinBtn').classList.remove('hidden');
+    $('#phraseGoBtn').classList.add('hidden');
+    renderProgress();
+    showScreen('screen-phrase-round');
+  }
+  $('#phraseStartBtn').addEventListener('click', phraseStart);
+  $('#phraseAgainBtn').addEventListener('click', phraseStart);
+  $('#phraseSettingsBtn').addEventListener('click', () => { renderModeChips(); showScreen('screen-phrase-setup'); });
+  $('#phraseGamesBtn').addEventListener('click', () => showScreen('screen-games'));
+
+  function renderProgress() {
+    $('#phProgress').textContent = 'Вопрос ' + (phrase.asked + 1) + ' из ' + (state.players.length * phrase.per);
+  }
+
+  function drawPair() {
+    const answerer = phrase.queue.shift();
+    const others = state.players.filter(p => p !== answerer);
+    const free = others.filter(o => !phrase.usedPairs.includes(o + '→' + answerer));
+    let reader;
+    if (free.length) reader = free[Math.floor(Math.random() * free.length)];
+    else {   // все пары с этим отвечающим были — по кругу
+      phrase.usedPairs = phrase.usedPairs.filter(p => !p.endsWith('→' + answerer));
+      reader = others[Math.floor(Math.random() * others.length)];
+    }
+    phrase.usedPairs.push(reader + '→' + answerer);
+    return { reader, answerer };
+  }
+
+  function spinColumns(reader, answerer) {
+    const n = state.players.length, H = PHRASE_H;
+    [['#colReader', reader], ['#colAnswerer', answerer]].forEach(([sel, who], k) => {
+      const track = $(sel);
+      const rIdx = Math.max(0, state.players.indexOf(who));
+      const reps = 3;
+      let html = '';
+      for (let i = 0; i < n * (reps + 1); i++) {
+        html += `<div class="pair-item" style="background:${playerColor(i % n)}">${esc(state.players[i % n])}</div>`;
+      }
+      track.innerHTML = html;
+      track.style.transition = 'none';
+      track.style.transform = 'translateY(0)';
+      void track.offsetWidth;
+      const target = reps * n + rIdx;      // окно остановится на этом имени
+      requestAnimationFrame(() => {
+        track.style.transition = `transform 1.9s cubic-bezier(.15,.85,.25,1) ${k * .15}s`;
+        track.style.transform = `translateY(-${target * H}px)`;
+      });
+    });
+  }
+
+  $('#pairSpinBtn').addEventListener('click', () => {
+    if (!phrase.queue.length) return showPhResults();
+    phrase.current = drawPair();
+    spinColumns(phrase.current.reader, phrase.current.answerer);
+    $('#pairSpinBtn').classList.add('hidden');
+    $('#phraseGoBtn').classList.add('hidden');
+    $('#pairCaption').textContent = '...';
+    setTimeout(() => {
+      $('#pairCaption').textContent = phrase.current.reader + ' читает — ' + phrase.current.answerer + ' отвечает!';
+      $('#phraseGoBtn').classList.remove('hidden');
+      vibrate(40);
+    }, 2250);
+  });
+
+  function drawPrompt() {
+    if (!phrase.bag.length) {
+      const cats = phrase.mode === 'all' ? ['friendly', 'names', 'dark'] : [phrase.mode];
+      phrase.bag = cats.flatMap(c => window.PHRASE.prompts[c]).filter(t => !state.blacklist.includes(t)).sort(() => Math.random() - .5);
+    }
+    return phrase.bag.pop() || window.PHRASE.prompts.friendly[0];
+  }
+
+  $('#phraseGoBtn').addEventListener('click', () => {
+    if (!phrase.current) return;
+    const tpl = drawPrompt();
+    const r = renderTemplate(tpl, phrase.current.answerer, pickOther(phrase.current.answerer));
+    $('#phTaskMeta').textContent = phrase.current.answerer + ' отвечает · вопрос ' + (phrase.asked + 1) + ' из ' + (state.players.length * phrase.per);
+    $('#phTaskText').innerHTML = r.html;
+    state.currentPlain = r.plain;
+    $('#phraseRateBtn').classList.remove('hidden');
+    $('#ratePanel').classList.add('hidden');
+    showScreen('screen-phrase-task');
+    speak(r.plain);
+  });
+
+  $('#phraseRateBtn').addEventListener('click', () => $('#ratePanel').classList.remove('hidden'));
+  $('#ratePanel').addEventListener('click', e => {
+    const b = e.target.closest('[data-r]'); if (!b) return;
+    const who = phrase.current.answerer;
+    phrase.scores[who].push(parseInt(b.dataset.r, 10));
+    phrase.asked++;
+    if (!phrase.queue.length) return showPhResults();
+    $('#pairCaption').textContent = 'Выберите пару!';
+    $('#pairSpinBtn').classList.remove('hidden');
+    $('#phraseGoBtn').classList.add('hidden');
+    renderProgress();
+    showScreen('screen-phrase-round');
+  });
+
+  function showPhResults() {
+    const rows = state.players.map(nm => {
+      const arr = phrase.scores[nm] || [];
+      return { nm, sum: arr.reduce((a, b) => a + b, 0) };
+    }).sort((a, b) => b.sum - a.sum);
+    const loser = rows[rows.length - 1];
+    $('#phResultsTitle').textContent = 'Круг завершён';
+    $('#phResultsTable').innerHTML = rows.map(r =>
+      `<div class="ph-result-row${r === loser ? ' loser' : ''}"><b>${esc(r.nm)}</b><span class="ph-score">${r.sum}</span></div>`).join('');
+    $('#phLoser').innerHTML = 'Последнее место — <b>' + esc(loser.nm) + '</b>: ' + esc(state.punish);
+    showScreen('screen-phrase-results');
+    vibrate([60, 60, 140]);
+  }
+
   /* ══════════ Настройки ══════════ */
   function openSettings() {
     renderChips();
@@ -686,6 +864,10 @@
   $('#setStatsBtn').addEventListener('click', () => {
     $('#settingsModal').classList.add('hidden');
     renderStats('Статистика');
+  });
+  $('#setGamesBtn').addEventListener('click', () => {
+    $('#settingsModal').classList.add('hidden');
+    showScreen('screen-games');
   });
 
   function syncSoundIcons() {
@@ -765,11 +947,13 @@
 
   /* ── Старт: всегда с игроков ── */
   buildCarousel();
+  buildGames();
   syncSoundIcons();
   syncCarousel(false);
   if (state.players.length < 2) state.players = state.players.concat(['', '']);
   renderPlayers();
   renderHud();
+  $('#perValue').textContent = phrase.per;
   if (state.blitz) startBlitzClock();
   showScreen('screen-players');
 
