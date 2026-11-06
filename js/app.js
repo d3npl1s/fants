@@ -24,6 +24,8 @@
     remaining: store.get('remaining', []),  // кто ещё в колесе в текущем круге
     sound: store.get('sound', true),
     tts: store.get('tts', true),            // озвучка заданий диктором
+    genders: store.get('genders', {}),      // имя → 'm' | 'f' | '' — только для окончаний
+    chosen: store.get('chosen', {}),        // имя → { truth: [], action: [] } — уже выпадавшие игроку
     streaks: {},          // имя игрока -> { type, count } — лимит «2 раза подряд»
     bags: {},             // мешки заданий без повторов
     timerId: null,
@@ -104,7 +106,10 @@
   /* ── Склонение имён: acc (кого), dat (кому), inst (с кем), gen (кого/чего) ── */
   function decline(raw, cs) {
     const name = String(raw).trim();
-    if (!/[а-яёА-ЯЁ]/.test(name)) return name;          // не кириллица — как есть
+    if (!/[а-яёА-ЯЁ]/.test(name)) {                     // латиница/ники: denplis → denplis'а, denplis'ом
+      const end = { acc: 'а', dat: 'у', inst: 'ом', gen: 'а' }[cs];
+      return end ? name + "'" + end : name;
+    }
     const low = name.toLowerCase();
     let forms;
     if (low.endsWith('ия')) {                            // Мария → Марию, Марии, Марией
@@ -161,11 +166,26 @@
       const row = document.createElement('div');
       row.className = 'player-row';
       row.innerHTML = `<input maxlength="14" placeholder="Имя ${i + 1}" style="border-left:6px solid ${playerColor(i)}">
+        <button class="gx" title="Пол — для окончаний в заданиях"></button>
         <button class="rm" title="Удалить">×</button>`;
       const inp = row.querySelector('input');
       inp.value = name;
       inp.addEventListener('input', () => { state.players[i] = inp.value.trim(); });
       inp.addEventListener('blur', () => { state.players[i] = inp.value.trim(); store.set('players', state.players); });
+      // пол: — → М → Ж → — (влияет только на грамматику заданий)
+      const gx = row.querySelector('.gx');
+      const gxLabel = () => {
+        const cur = state.genders[state.players[i]] || '';
+        gx.textContent = cur === 'm' ? 'М' : cur === 'f' ? 'Ж' : '—';
+      };
+      gxLabel();
+      gx.addEventListener('click', () => {
+        const nm = state.players[i];                 // читаем актуальное имя, а не снимок при рендере
+        const cur = state.genders[nm];
+        state.genders[nm] = cur === 'm' ? 'f' : cur === 'f' ? '' : 'm';
+        store.set('genders', state.genders);
+        gxLabel();
+      });
       row.querySelector('.rm').addEventListener('click', () => {
         state.players.splice(i, 1); store.set('players', state.players); renderPlayers();
       });
@@ -275,12 +295,33 @@
     return others[Math.floor(Math.random() * others.length)] || name;
   }
 
-  function drawTask(level, type) {
+  function drawTask(level, type, playerName) {
     const bagKey = level + ':' + type;
     if (!state.bags[bagKey] || !state.bags[bagKey].length) {
       state.bags[bagKey] = [...DATA.tasks[level][type]].sort(() => Math.random() - .5);
     }
-    return state.bags[bagKey].pop();
+    // то, что игрок уже ВЫБИРАЛ, ему снова не выпадает; не выбранное — может
+    const chosenBy = (state.chosen[playerName] || {})[type] || [];
+    const skipped = [];
+    let text = null;
+    while (state.bags[bagKey].length) {
+      const t = state.bags[bagKey].pop();
+      if (chosenBy.includes(t)) { skipped.push(t); continue; }
+      text = t; break;
+    }
+    if (text === null) {                    // игрок уже прошёл всё — разрешаем повторы
+      state.bags[bagKey] = skipped;
+      text = state.bags[bagKey].pop() || DATA.tasks[level][type][0];
+    } else {
+      skipped.forEach(t => state.bags[bagKey].unshift(t));
+    }
+    return text;
+  }
+
+  function markChosen(name, type, text) {
+    if (!state.chosen[name]) state.chosen[name] = { truth: [], action: [] };
+    if (!state.chosen[name][type].includes(text)) state.chosen[name][type].push(text);
+    store.set('chosen', state.chosen);
   }
 
   function spin(opts = {}) {
@@ -369,8 +410,8 @@
   function openChoice(name) {
     pending = {
       name,
-      truth: drawTask(state.level, 'truth'),
-      action: drawTask(state.level, 'action')
+      truth: drawTask(state.level, 'truth', name),
+      action: drawTask(state.level, 'action', name)
     };
     $('#choiceName').textContent = name;
     // текст и «случайный друг» фиксируются один раз: превью = то, что получишь после выбора
@@ -399,6 +440,10 @@
   }
 
   function renderTemplate(tpl, name, other) {
+    // пол игрока: «(а)»-окончания → «а» или пусто; пол не указан — остаётся «(а)»
+    const g = state.genders[name];
+    if (g === 'f') tpl = tpl.replace(/\((а|ась|ой|на|ся|ись)\)/g, '$1');
+    else if (g === 'm') tpl = tpl.replace(/\((а|ась|ой|на|ся|ись)\)/g, '');
     // падежные токены: {other-acc} = кого, {other-dat} = кому, {other-inst} = с кем, {other-gen} = кого/чего
     const v = {
       'name': name, 'other': other,
@@ -424,6 +469,7 @@
     const st = state.streaks[pending.name];
     if (st && st.type === type) st.count += 1;
     else state.streaks[pending.name] = { type, count: 1 };
+    markChosen(pending.name, type, pending[type]);   // выбранное больше не выпадет этому игроку
     reveal(type);
   }
 
@@ -454,8 +500,7 @@
     revealSound(isTruth);
     app.classList.remove('failed');
     $('#failBanner').classList.add('hidden');
-    $('#actionRow').classList.remove('hidden');
-    $('#btnNext').classList.add('hidden');
+    $('#actionRow').classList.remove('hidden', 'timed-out');
     showScreen('screen-reveal');
     startTimer(levelTimerSecs());
     speak(plain);                       // диктор читает задание
@@ -493,8 +538,8 @@
     $('#timerSecs').textContent = '0';
     app.classList.add('failed');
     $('#failBanner').classList.remove('hidden');
-    $('#actionRow').classList.add('hidden');
-    $('#btnNext').classList.remove('hidden');
+    // «Выполнил» остаётся (можно не успеть нажать), «Не выполнил» — акцент
+    $('#actionRow').classList.add('timed-out');
     failSound();
     vibrate([200, 100, 200, 100, 300]);
   }
@@ -528,7 +573,6 @@
 
   $('#btnDone').addEventListener('click', () => completeTask(true));
   $('#btnFail').addEventListener('click', () => completeTask(false));
-  $('#btnNext').addEventListener('click', () => completeTask(false));
 
   /* ── Внутренний таймер задания ── */
   $('#taskTimerBtn').addEventListener('click', () => {

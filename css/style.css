@@ -154,6 +154,12 @@ body {
   cursor: pointer; box-shadow: var(--shadow); display: grid; place-items: center;
 }
 .player-row .rm:active { transform: scale(.92); }
+.player-row .gx {
+  flex: 0 0 52px; height: 62px; border-radius: 14px; border: 2px solid rgba(255,255,255,.35);
+  background: rgba(33,38,92,.55); color: #fff; font-size: 19px; font-weight: 800;
+  cursor: pointer; box-shadow: var(--shadow);
+}
+.player-row .gx:active { transform: scale(.92); }
 .ghost-btn {
   align-self: flex-start; border: 2px dashed rgba(255,255,255,.75); background: transparent; color: #fff;
   border-radius: 14px; padding: 14px 20px; font-size: 17px; font-weight: 700; cursor: pointer;
@@ -344,15 +350,23 @@ body {
 }
 .done-btn:active { transform: scale(.97); }
 .action-row { display: flex; gap: 16px; justify-content: center; }
-.act-btn { border: none; background: transparent; padding: 0; cursor: pointer; }
+.act-btn {
+  border: none; background: transparent; padding: 0; cursor: pointer;
+  transition: transform .28s ease, opacity .28s ease;
+}
 .act-btn span {
   display: block; transform: skewX(-12deg); border-radius: 10px;
   padding: 14px 26px; font-size: 17px; font-weight: 800;
   box-shadow: var(--shadow); white-space: nowrap;
+  transition: background .28s ease, border-color .28s ease;
 }
 .act-btn.ok span { background: #fff; color: var(--navy); }
 .act-btn.no span { background: rgba(24, 27, 66, .55); color: #fff; border: 2px solid rgba(255,255,255,.45); }
 .act-btn:active { transform: scale(.95); }
+/* время вышло: провал акцентируется, выполненный — тускнеет, но работает */
+.action-row.timed-out .act-btn.no { transform: scale(1.12); }
+.action-row.timed-out .act-btn.no span { background: #c62828; border-color: #fff; }
+.action-row.timed-out .act-btn.ok { transform: scale(.88); opacity: .8; }
 
 /* ═══════════ Спин-оверлей ═══════════ */
 .spin-overlay {
