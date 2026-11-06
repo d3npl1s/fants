@@ -23,12 +23,15 @@
     round: store.get('round', 1),
     remaining: store.get('remaining', []),  // кто ещё в колесе в текущем круге
     sound: store.get('sound', true),
+    tts: store.get('tts', true),            // озвучка заданий диктором
     streaks: {},          // имя игрока -> { type, count } — лимит «2 раза подряд»
     bags: {},             // мешки заданий без повторов
     timerId: null,
+    taskTimerId: null,
     spinning: false,
     taskFailed: false,
-    currentTask: null
+    currentTask: null,
+    currentPlain: ''
   };
 
   const app = $('#app');
@@ -63,6 +66,28 @@
   const failSound = () => { beep(196, .3, 'sawtooth', .18); beep(147, .45, 'sawtooth', .18, .3); };
   const vibrate = p => { if (navigator.vibrate) navigator.vibrate(p); };
 
+  /* ── Озвучка заданий (системный речевой синтез) ── */
+  let ruVoice = null;
+  function pickVoice() {
+    try {
+      const vs = speechSynthesis.getVoices();
+      ruVoice = vs.find(v => v.lang && v.lang.toLowerCase().startsWith('ru')) || null;
+    } catch { ruVoice = null; }
+  }
+  if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+  function speak(text) {
+    if (!state.tts || !('speechSynthesis' in window) || !text) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ru-RU';
+      if (ruVoice) u.voice = ruVoice;
+      u.rate = 1.02;
+      speechSynthesis.speak(u);
+    } catch {}
+  }
+  const stopSpeak = () => { try { speechSynthesis.cancel(); } catch {} };
+
   /* ── Тост ── */
   let toastT = null;
   function toast(msg) {
@@ -74,6 +99,40 @@
 
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const playerColor = i => PLAYER_COLORS[i % PLAYER_COLORS.length];
+  const fmtTime = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+
+  /* ── Склонение имён: acc (кого), dat (кому), inst (с кем), gen (кого/чего) ── */
+  function decline(raw, cs) {
+    const name = String(raw).trim();
+    if (!/[а-яёА-ЯЁ]/.test(name)) return name;          // не кириллица — как есть
+    const low = name.toLowerCase();
+    let forms;
+    if (low.endsWith('ия')) {                            // Мария → Марию, Марии, Марией
+      const s = low.slice(0, -1);
+      forms = { acc: s + 'ю', dat: s + 'и', inst: s + 'ей', gen: s + 'и' };
+    } else if (low.endsWith('ья')) {                     // Илья → Илью, Илье, Ильём
+      const s = low.slice(0, -2) + 'ь';
+      forms = { acc: s + 'ю', dat: s + 'е', inst: s + 'ём', gen: s + 'я' };
+    } else if (low.endsWith('я')) {                      // Даня → Даню, Дане, Даней, Дани
+      const s = low.slice(0, -1);
+      forms = { acc: s + 'ю', dat: s + 'е', inst: s + 'ей', gen: s + 'и' };
+    } else if (low.endsWith('а')) {                      // Ника → Нику, Нике, Никой, Ники
+      const s = low.slice(0, -1);
+      const hiss = /[кгхжшщч]$/.test(s);
+      forms = { acc: s + 'у', dat: s + 'е', inst: s + 'ой', gen: s + (hiss ? 'и' : 'ы') };
+    } else if (low.endsWith('й')) {                      // Андрей → Андрея, Андрею, Андреем
+      const s = low.slice(0, -1);
+      forms = { acc: s + 'я', dat: s + 'ю', inst: s + 'ем', gen: s + 'я' };
+    } else if (low.endsWith('ь')) {                      // Игорь → Игоря, Игорю, Игорем
+      const s = low.slice(0, -1);
+      forms = { acc: s + 'я', dat: s + 'ю', inst: s + 'ем', gen: s + 'я' };
+    } else {                                             // Денис → Дениса, Денису, Денисом
+      forms = { acc: low + 'а', dat: low + 'у', inst: low + 'ом', gen: low + 'а' };
+    }
+    let res = forms[cs] || name;
+    if (name[0] === name[0].toUpperCase()) res = res.charAt(0).toUpperCase() + res.slice(1);
+    return res;
+  }
 
   /* ── Круги: кто остался в колесе ── */
   function resetRounds() {
@@ -191,15 +250,25 @@
   $('#backToLevels').addEventListener('click', () => { showScreen('screen-levels'); syncCarousel(); });
   $('#spinBtn').addEventListener('click', spin);
 
-  // свайп в любом месте экрана запускает колесо
+  // свайп в любом месте экрана запускает колесо — как продолжение жеста (палец или мышь)
   let swipeStart = null;
   const wheelScreen = $('#screen-wheel');
-  wheelScreen.addEventListener('touchstart', e => { swipeStart = e.touches[0].clientX; }, { passive: true });
-  wheelScreen.addEventListener('touchend', e => {
-    if (swipeStart === null) return;
-    if (Math.abs(e.changedTouches[0].clientX - swipeStart) > 45) spin();
+  wheelScreen.addEventListener('pointerdown', e => {
+    if (!e.isPrimary) return;
+    swipeStart = { x: e.clientX, y: e.clientY, t: performance.now() };
+  });
+  wheelScreen.addEventListener('pointerup', e => {
+    if (!swipeStart || !e.isPrimary) return;
+    const dx = e.clientX - swipeStart.x, dy = e.clientY - swipeStart.y;
+    const dt = Math.max(1, performance.now() - swipeStart.t);
     swipeStart = null;
-  }, { passive: true });
+    if (Math.hypot(dx, dy) < 45) return;
+    // направление ленты вслед за жестом: вправо/вниз — имена вниз, влево/вверх — вверх
+    const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? -1 : 1) : (dy > 0 ? -1 : 1);
+    const v = Math.min(8, Math.max(1.2, Math.hypot(dx, dy) / dt));   // скорость жеста, px/мс
+    spin({ swipe: true, dir, v });
+  });
+  wheelScreen.addEventListener('pointercancel', () => { swipeStart = null; });
 
   function pickOther(name) {
     const others = state.players.filter(p => p !== name);
@@ -214,19 +283,25 @@
     return state.bags[bagKey].pop();
   }
 
-  function spin() {
+  function spin(opts = {}) {
     if (state.spinning || state.players.length < 2) return;
     state.spinning = true;
     vibrate(30);
 
+    // экран колеса плавно уезжает — имена подъезжают следом
+    const wheelScreen = $('#screen-wheel');
+    const overlay = $('#spinOverlay');
+    wheelScreen.classList.add('leaving');
+
     const rem = state.remaining.length ? state.remaining : [...state.players];
     const n = rem.length;
     const chosenIdx = Math.floor(Math.random() * n);
-    const loops = 2 + Math.floor(Math.random() * 2);            // 2–3 круга
-    const steps = loops * n + chosenIdx;
     const pad = SPIN_PAD;
-    const total = steps + pad * 2 + 1;
-    const winIdx = steps + pad;                                  // индекс победителя в ленте
+    const dir = opts.dir || 1;                                   // 1 — лента вверх, -1 — вниз
+    const loops = 2 + Math.floor(Math.random() * 2);             // 2–3 оборота
+    const endIdx = pad + chosenIdx + loops * n;                  // где встанет победитель
+    const startIdx = dir === 1 ? pad : endIdx + (n - chosenIdx) + loops * n;
+    const total = Math.max(endIdx, startIdx) + pad + 3;
 
     const track = $('#spinTrack');
     let html = '';
@@ -238,32 +313,37 @@
     }
     track.innerHTML = html;
 
-    const overlay = $('#spinOverlay');
     overlay.classList.remove('hidden');
+    void overlay.offsetWidth;
+    overlay.classList.add('show');
 
     // имя i по центру: translate(-50%, (total/2 - i - 0.5) * H)
     const offset = i => (total / 2 - i - .5) * NAME_H;
     track.style.transition = 'none';
-    track.style.transform = `translate(-50%, calc(-50% + ${offset(pad)}px))`;
+    track.style.transform = `translate(-50%, calc(-50% + ${offset(startIdx)}px))`;
     void track.offsetWidth;
 
-    const from = offset(pad), to = offset(winIdx);
+    const from = offset(startIdx), to = offset(endIdx);
     const dist = to - from;
-    const dur = 3200;
+    let dur, ease;
+    if (opts.swipe) {                     // свайп: лента сразу летит, как продолжение жеста
+      ease = t => 1 - Math.pow(1 - t, 3);
+      dur = Math.min(5500, Math.max(1500, 3 * Math.abs(dist) / (opts.v || 3)));
+    } else {                              // тап: старт с места, разгон в середине
+      ease = t => t < .5 ? 8 * t * t * t * t : 1 - 8 * Math.pow(1 - t, 4);
+      dur = 3200 + Math.random() * 600;
+    }
     const t0 = performance.now();
     let lastIdx = -1;
-
-    // разгон с места → быстрый разгон → быстрая остановка
-    const ease = t => t < .5 ? 8 * t * t * t * t : 1 - 8 * Math.pow(1 - t, 4);
 
     function frame(now) {
       const t = Math.min(1, (now - t0) / dur);
       const y = from + ease(t) * dist;
-      const idx = Math.floor(-y / NAME_H + total / 2);
+      const idx = Math.floor(total / 2 - y / NAME_H);
       if (idx !== lastIdx) { lastIdx = idx; tickSound(); }
       track.style.transform = `translate(-50%, calc(-50% + ${y}px))`;
       if (t < 1) requestAnimationFrame(frame);
-      else finishSpin(winIdx, rem[chosenIdx]);
+      else finishSpin(endIdx, rem[chosenIdx]);
     }
     requestAnimationFrame(frame);
   }
@@ -274,7 +354,10 @@
     vibrate([60, 60, 140]);
     // победитель колеса — единственный источник имени для экрана выбора
     setTimeout(() => {
-      $('#spinOverlay').classList.add('hidden');
+      const ov = $('#spinOverlay');
+      ov.classList.add('hidden');
+      ov.classList.remove('show');
+      $('#screen-wheel').classList.remove('leaving');
       openChoice(winnerName);
       state.spinning = false;
     }, 700);
@@ -290,11 +373,13 @@
       action: drawTask(state.level, 'action')
     };
     $('#choiceName').textContent = name;
-    // текст фиксируется один раз: превью = то, что получишь после выбора
-    pending.truthHtml = renderTemplate(pending.truth, name);
-    pending.actionHtml = renderTemplate(pending.action, name);
-    $('#truthPreview').innerHTML = pending.truthHtml;
-    $('#actionPreview').innerHTML = pending.actionHtml;
+    // текст и «случайный друг» фиксируются один раз: превью = то, что получишь после выбора
+    const t = renderTemplate(pending.truth, name, pickOther(name));
+    const a = renderTemplate(pending.action, name, pickOther(name));
+    pending.truthHtml = t.html; pending.truthPlain = t.plain;
+    pending.actionHtml = a.html; pending.actionPlain = a.plain;
+    $('#truthPreview').innerHTML = t.html;
+    $('#actionPreview').innerHTML = a.html;
 
     // лимит: тот же вариант не больше 2 раз подряд (сброс — выбором противоположного)
     const st = state.streaks[name];
@@ -313,10 +398,21 @@
     showScreen('screen-choice');
   }
 
-  function renderTemplate(tpl, name) {
-    return esc(tpl)
-      .replaceAll('{name}', `<b>${esc(name)}</b>`)
-      .replaceAll('{other}', `<b>${esc(pickOther(name))}</b>`);
+  function renderTemplate(tpl, name, other) {
+    // падежные токены: {other-acc} = кого, {other-dat} = кому, {other-inst} = с кем, {other-gen} = кого/чего
+    const v = {
+      'name': name, 'other': other,
+      'name-acc': decline(name, 'acc'), 'name-dat': decline(name, 'dat'),
+      'name-inst': decline(name, 'inst'), 'name-gen': decline(name, 'gen'),
+      'other-acc': decline(other, 'acc'), 'other-dat': decline(other, 'dat'),
+      'other-inst': decline(other, 'inst'), 'other-gen': decline(other, 'gen')
+    };
+    let html = tpl, plain = tpl;
+    Object.keys(v).sort((a, b) => b.length - a.length).forEach(k => {
+      html = html.split('{' + k + '}').join('<b>' + esc(v[k]) + '</b>');
+      plain = plain.split('{' + k + '}').join(v[k]);
+    });
+    return { html, plain };
   }
 
   $('#choiceTruth').addEventListener('click', () => choose('truth'));
@@ -337,7 +433,24 @@
     state.taskFailed = false;
     const isTruth = type === 'truth';
     $('#revealType').textContent = isTruth ? 'правда' : 'действие';
-    $('#revealText').innerHTML = isTruth ? pending.truthHtml : pending.actionHtml;
+    let html = isTruth ? pending.truthHtml : pending.actionHtml;
+    let plain = isTruth ? pending.truthPlain : pending.actionPlain;
+
+    // внутренний таймер задания: [[таймер N]]
+    const m = plain.match(/\[\[таймер (\d+)\]\]/);
+    clearInterval(state.taskTimerId);
+    const tb = $('#taskTimerBtn');
+    tb.classList.remove('running', 'finished');
+    if (m) {
+      tb.dataset.secs = m[1];
+      tb.textContent = 'Запустить таймер (' + fmtTime(parseInt(m[1], 10)) + ')';
+      tb.classList.remove('hidden');
+      html = html.replace(/\s*\[\[таймер \d+\]\]/g, '');
+      plain = plain.replace(/\s*\[\[таймер \d+\]\]/g, '');
+    } else tb.classList.add('hidden');
+
+    $('#revealText').innerHTML = html;
+    state.currentPlain = plain;
     revealSound(isTruth);
     app.classList.remove('failed');
     $('#failBanner').classList.add('hidden');
@@ -345,6 +458,7 @@
     $('#btnNext').classList.add('hidden');
     showScreen('screen-reveal');
     startTimer(levelTimerSecs());
+    speak(plain);                       // диктор читает задание
   }
 
   const levelTimerSecs = () => {
@@ -388,6 +502,7 @@
   /* ── Круги: Выполнил → вылетает до следующего круга; Не выполнил → остаётся ── */
   function completeTask(done) {
     stopTimer();
+    stopSpeak();
     app.classList.remove('failed');
     $('#failBanner').classList.add('hidden');
     const name = pending.name;
@@ -415,11 +530,36 @@
   $('#btnFail').addEventListener('click', () => completeTask(false));
   $('#btnNext').addEventListener('click', () => completeTask(false));
 
+  /* ── Внутренний таймер задания ── */
+  $('#taskTimerBtn').addEventListener('click', () => {
+    const b = $('#taskTimerBtn');
+    if (b.classList.contains('running')) return;
+    b.classList.add('running');
+    const endAt = Date.now() + parseInt(b.dataset.secs, 10) * 1000;
+    clearInterval(state.taskTimerId);
+    state.taskTimerId = setInterval(() => {
+      const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+      b.textContent = fmtTime(left);
+      if (left <= 0) {
+        clearInterval(state.taskTimerId);
+        b.classList.remove('running');
+        b.classList.add('finished');
+        b.textContent = 'Время!';
+        beep(660, .15, 'triangle', .18);
+        vibrate([120, 80, 120]);
+      }
+    }, 250);
+  });
+
+  /* ── Повтор озвучки ── */
+  $('#ttsBtn').addEventListener('click', () => speak(state.currentPlain));
+
   /* ══════════ Настройки ══════════ */
   function openSettings() {
     renderChips();
     $('#setPlayersCount').textContent = state.players.length || '—';
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
+    $('#setTtsState').textContent = state.tts ? 'Вкл' : 'Выкл';
     $('#settingsModal').classList.remove('hidden');
   }
   function renderChips() {
@@ -441,6 +581,12 @@
     state.sound = !state.sound; store.set('sound', state.sound);
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
     syncSoundIcons();
+  });
+  $('#setTtsBtn').addEventListener('click', () => {
+    state.tts = !state.tts; store.set('tts', state.tts);
+    $('#setTtsState').textContent = state.tts ? 'Вкл' : 'Выкл';
+    if (!state.tts) stopSpeak();
+    else toast('Диктор озвучит следующее задание');
   });
 
   function syncSoundIcons() {

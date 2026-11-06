@@ -202,7 +202,8 @@ body {
 .dots i.on { background: #fff; }
 
 /* ── Колесо ── */
-.screen-wheel { overflow: hidden; }
+.screen-wheel { overflow: hidden; touch-action: none; transition: transform .4s cubic-bezier(.4, 0, .2, 1), opacity .4s; }
+.screen-wheel.leaving { transform: translateX(-30%) scale(.96); opacity: 0; }
 .wheel-bg { position: absolute; inset: -20%; }
 .stripe { position: absolute; top: -10%; bottom: -10%; width: 46%; transform: rotate(24deg); }
 .stripe.s1 { left: -14%; background: var(--s1); }
@@ -299,6 +300,15 @@ body {
 .reveal-divider { width: 150px; height: 5px; background: #fff; border-radius: 3px; box-shadow: 0 3px 8px rgba(0,0,0,.2); }
 .reveal-text { font-size: 24px; font-weight: 700; line-height: 1.55; max-width: 560px; text-shadow: 0 2px 6px rgba(0,0,0,.2); }
 .reveal-text b { color: var(--navy); font-weight: 800; }
+.task-timer {
+  border: 2px solid rgba(255,255,255,.7); background: rgba(24, 27, 66, .5); color: #fff;
+  font-family: inherit; font-size: 16px; font-weight: 800; padding: 12px 24px;
+  border-radius: 30px; cursor: pointer; box-shadow: var(--shadow);
+  font-variant-numeric: tabular-nums;
+}
+.task-timer.running { background: #1d8a4e; border-color: #1d8a4e; }
+.task-timer.finished { background: var(--navy); border-color: var(--navy); }
+.task-timer:not(.running):active { transform: scale(.96); }
 
 .fail-banner {
   position: absolute; top: calc(env(safe-area-inset-top, 0px) + 84px); left: 50%; transform: translateX(-50%);
@@ -333,20 +343,24 @@ body {
   box-shadow: var(--shadow);
 }
 .done-btn:active { transform: scale(.97); }
-.action-row { display: flex; gap: 12px; }
-.act-btn {
-  flex: 1; border: none; border-radius: 40px; padding: 16px 12px; cursor: pointer;
-  font-size: 19px; font-weight: 800; color: #fff; box-shadow: var(--shadow);
+.action-row { display: flex; gap: 16px; justify-content: center; }
+.act-btn { border: none; background: transparent; padding: 0; cursor: pointer; }
+.act-btn span {
+  display: block; transform: skewX(-12deg); border-radius: 10px;
+  padding: 14px 26px; font-size: 17px; font-weight: 800;
+  box-shadow: var(--shadow); white-space: nowrap;
 }
-.act-btn.ok { background: #1d8a4e; }
-.act-btn.no { background: #b3272d; }
-.act-btn:active { transform: scale(.96); }
+.act-btn.ok span { background: #fff; color: var(--navy); }
+.act-btn.no span { background: rgba(24, 27, 66, .55); color: #fff; border: 2px solid rgba(255,255,255,.45); }
+.act-btn:active { transform: scale(.95); }
 
 /* ═══════════ Спин-оверлей ═══════════ */
 .spin-overlay {
   position: fixed; inset: 0; z-index: 80; overflow: hidden;
   background: linear-gradient(178deg, var(--s2), var(--s3));
+  opacity: 0; transition: opacity .32s ease;
 }
+.spin-overlay.show { opacity: 1; }
 .spin-rot {
   position: absolute; left: 50%; top: 50%;
   width: 170vmax; height: 170vmax;
