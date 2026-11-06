@@ -390,7 +390,7 @@
     const chosenIdx = Math.floor(Math.random() * n);
     const pad = SPIN_PAD;
     const dir = opts.dir || 1;                                   // 1 — лента вверх, -1 — вниз
-    const loops = 2 + Math.floor(Math.random() * 2);             // 2–3 оборота
+    const loops = opts.swipe ? 2 + Math.floor(Math.random() * 2) : 1;  // свайп — 2–3 оборота, тап — один короткий
     const endIdx = pad + chosenIdx + loops * n;                  // где встанет победитель
     const startIdx = dir === 1 ? pad : endIdx + (n - chosenIdx) + loops * n;
     const total = Math.max(endIdx, startIdx) + pad + 3;
@@ -421,9 +421,9 @@
     if (opts.swipe) {                     // свайп: лента сразу летит, как продолжение жеста
       ease = t => 1 - Math.pow(1 - t, 3);
       dur = Math.min(5500, Math.max(1500, 3 * Math.abs(dist) / (opts.v || 3)));
-    } else {                              // тап: старт с места, разгон в середине
-      ease = t => t < .5 ? 8 * t * t * t * t : 1 - 8 * Math.pow(1 - t, 4);
-      dur = 3200 + Math.random() * 600;
+    } else {                              // тап: максимально короткий прогон
+      ease = t => 1 - Math.pow(1 - t, 3);
+      dur = 750 + Math.random() * 200;
     }
     const t0 = performance.now();
     let lastIdx = -1;
@@ -540,17 +540,24 @@
     let html = isTruth ? pending.truthHtml : pending.actionHtml;
     let plain = isTruth ? pending.truthPlain : pending.actionPlain;
 
-    // внутренний таймер задания: [[таймер N]]
+    // таймер задания: явный [[таймер N]] или длительность в тексте («на 15 секунд», «2 минуты»)
     const m = plain.match(/\[\[таймер (\d+)\]\]/);
+    let secs = 0;
+    if (m) {
+      secs = parseInt(m[1], 10);
+      html = html.replace(/\s*\[\[таймер \d+\]\]/g, '');
+      plain = plain.replace(/\s*\[\[таймер \d+\]\]/g, '');
+    } else {
+      const a = plain.match(/(\d+)\s*(секунд\S*|сек\b|минут\S*|мин\b)/);
+      if (a) secs = /мин/.test(a[2]) ? parseInt(a[1], 10) * 60 : parseInt(a[1], 10);
+    }
     clearInterval(state.taskTimerId);
     const tb = $('#taskTimerBtn');
     tb.classList.remove('running', 'finished');
-    if (m) {
-      tb.dataset.secs = m[1];
-      tb.textContent = 'Запустить таймер (' + fmtTime(parseInt(m[1], 10)) + ')';
+    if (secs > 0 && secs <= 600) {
+      tb.dataset.secs = secs;
+      tb.textContent = 'Запустить таймер (' + fmtTime(secs) + ')';
       tb.classList.remove('hidden');
-      html = html.replace(/\s*\[\[таймер \d+\]\]/g, '');
-      plain = plain.replace(/\s*\[\[таймер \d+\]\]/g, '');
     } else tb.classList.add('hidden');
 
     $('#revealText').innerHTML = html;
