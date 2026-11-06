@@ -58,6 +58,7 @@
       <div class="stripe s3"></div>
     </div>
     <button class="corner-back" id="backToLevels" aria-label="К выбору уровня">←</button>
+    <div class="wheel-hud"><b id="hudRound">Круг 1</b><span class="hud-sep"></span><span id="hudLeft">в колесе 4 из 4</span></div>
     <button class="spin-big-btn" id="spinBtn" aria-label="Запустить колесо">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
         <path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>
@@ -77,11 +78,13 @@
         <button class="choice-card truth" id="choiceTruth">
           <span class="cc-type">правда</span>
           <span class="cc-text" id="truthPreview"></span>
+          <span class="cc-hint" id="truthHint"></span>
           <span class="cc-lock hidden" id="truthLock">Уже 2 раза подряд — выбери другое</span>
         </button>
         <button class="choice-card action" id="choiceAction">
           <span class="cc-type">действие</span>
           <span class="cc-text" id="actionPreview"></span>
+          <span class="cc-hint" id="actionHint"></span>
           <span class="cc-lock hidden" id="actionLock">Уже 2 раза подряд — выбери другое</span>
         </button>
       </div>
@@ -107,8 +110,12 @@
           <svg id="soundOffIcon" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m16 9 6 6"/><path d="m22 9-6 6"/></svg>
         </button>
       </div>
-      <p class="punish-note">Не выполнил или не успел — <b>пей стопку</b></p>
-      <button class="done-btn" id="doneBtn">Готово! Крутим дальше ›</button>
+      <p class="punish-note">Не выполнил или не успел — <b>пей стопку</b> и остаёшься в колесе</p>
+      <div class="action-row" id="actionRow">
+        <button class="act-btn ok" id="btnDone">Выполнил</button>
+        <button class="act-btn no" id="btnFail">Не выполнил</button>
+      </div>
+      <button class="done-btn hidden" id="btnNext">Провал — остаёшься в колесе. Крутим дальше ›</button>
     </div>
   </section>
 

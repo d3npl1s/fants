@@ -217,6 +217,16 @@ body {
 }
 .corner-back:active { transform: scale(.92); }
 
+.wheel-hud {
+  position: absolute; top: calc(env(safe-area-inset-top, 0px) + 82px); left: 50%; transform: translateX(-50%);
+  z-index: 5; display: flex; align-items: center; gap: 12px;
+  background: rgba(33,38,92,.85); border-radius: 30px; padding: 10px 20px;
+  box-shadow: var(--shadow); white-space: nowrap;
+}
+.wheel-hud b { font-size: 17px; font-weight: 800; letter-spacing: .5px; }
+.wheel-hud span { font-size: 15px; font-weight: 600; opacity: .9; }
+.hud-sep { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.6); }
+
 .spin-big-btn {
   position: absolute; top: 44%; left: 50%; transform: translate(-50%, -50%);
   width: 172px; height: 172px; border-radius: 50%; border: none;
@@ -268,6 +278,8 @@ body {
 .cc-text { font-size: 18px; font-weight: 700; line-height: 1.45; }
 .cc-text b { opacity: .9; }
 .cc-lock { font-size: 15px; font-weight: 800; background: rgba(0,0,0,.3); padding: 6px 12px; border-radius: 10px; align-self: flex-start; }
+.cc-hint { font-size: 14px; font-weight: 600; line-height: 1.4; opacity: .85; }
+.cc-hint:empty { display: none; }
 #screen-choice .back-link { margin-top: auto; padding-top: 14px; }
 .back-link { border: none; background: transparent; color: #fff; font-size: 18px; font-weight: 700; opacity: .9; cursor: pointer; padding: 12px; }
 
@@ -321,6 +333,14 @@ body {
   box-shadow: var(--shadow);
 }
 .done-btn:active { transform: scale(.97); }
+.action-row { display: flex; gap: 12px; }
+.act-btn {
+  flex: 1; border: none; border-radius: 40px; padding: 16px 12px; cursor: pointer;
+  font-size: 19px; font-weight: 800; color: #fff; box-shadow: var(--shadow);
+}
+.act-btn.ok { background: #1d8a4e; }
+.act-btn.no { background: #b3272d; }
+.act-btn:active { transform: scale(.96); }
 
 /* ═══════════ Спин-оверлей ═══════════ */
 .spin-overlay {

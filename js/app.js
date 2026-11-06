@@ -20,11 +20,14 @@
   const state = {
     level: store.get('level', 'fun'),
     players: store.get('players', []),
+    round: store.get('round', 1),
+    remaining: store.get('remaining', []),  // кто ещё в колесе в текущем круге
     sound: store.get('sound', true),
     streaks: {},          // имя игрока -> { type, count } — лимит «2 раза подряд»
     bags: {},             // мешки заданий без повторов
     timerId: null,
     spinning: false,
+    taskFailed: false,
     currentTask: null
   };
 
@@ -72,6 +75,24 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const playerColor = i => PLAYER_COLORS[i % PLAYER_COLORS.length];
 
+  /* ── Круги: кто остался в колесе ── */
+  function resetRounds() {
+    state.round = 1;
+    state.remaining = [...state.players];
+    store.set('round', state.round);
+    store.set('remaining', state.remaining);
+    renderHud();
+  }
+  // при загрузке: remaining должен соответствовать текущим игрокам
+  if (!Array.isArray(state.remaining) || !state.remaining.length ||
+      state.remaining.some(n => !state.players.includes(n))) {
+    state.remaining = [...state.players];
+  }
+  function renderHud() {
+    $('#hudRound').textContent = 'Круг ' + state.round;
+    $('#hudLeft').textContent = 'в колесе ' + state.remaining.length + ' из ' + state.players.length;
+  }
+
   /* ══════════ Экран 1: игроки ══════════ */
   let setupReturn = 'screen-levels';
   function renderPlayers() {
@@ -108,6 +129,7 @@
     state.players = state.players.map(s => s.trim()).filter(Boolean);
     if (state.players.length < 2) return toast('Нужно минимум 2 игрока');
     store.set('players', state.players);
+    resetRounds();
     showScreen('screen-levels');
     syncCarousel();
   });
@@ -161,6 +183,7 @@
     state.level = levelId;
     store.set('level', levelId);
     app.dataset.level = levelId;
+    renderHud();
     showScreen('screen-wheel');
   }
 
@@ -196,7 +219,8 @@
     state.spinning = true;
     vibrate(30);
 
-    const n = state.players.length;
+    const rem = state.remaining.length ? state.remaining : [...state.players];
+    const n = rem.length;
     const chosenIdx = Math.floor(Math.random() * n);
     const loops = 2 + Math.floor(Math.random() * 2);            // 2–3 круга
     const steps = loops * n + chosenIdx;
@@ -208,7 +232,9 @@
     let html = '';
     for (let i = 0; i < total; i++) {
       const pIdx = ((i - pad) % n + n) % n;
-      html += `<div class="spin-name" data-i="${i}"><span style="background:${playerColor(pIdx)}">${esc(state.players[pIdx])}</span></div>`;
+      const pname = rem[pIdx];
+      const cIdx = Math.max(0, state.players.indexOf(pname));   // цвет — по позиции в общем списке
+      html += `<div class="spin-name" data-i="${i}"><span style="background:${playerColor(cIdx)}">${esc(pname)}</span></div>`;
     }
     track.innerHTML = html;
 
@@ -237,17 +263,16 @@
       if (idx !== lastIdx) { lastIdx = idx; tickSound(); }
       track.style.transform = `translate(-50%, calc(-50% + ${y}px))`;
       if (t < 1) requestAnimationFrame(frame);
-      else finishSpin(winIdx, chosenIdx);
+      else finishSpin(winIdx, rem[chosenIdx]);
     }
     requestAnimationFrame(frame);
   }
 
-  function finishSpin(winIdx, chosenIdx) {
+  function finishSpin(winIdx, winnerName) {
     const winner = document.querySelector(`.spin-name[data-i="${winIdx}"]`);
     if (winner) winner.classList.add('win');
     vibrate([60, 60, 140]);
     // победитель колеса — единственный источник имени для экрана выбора
-    const winnerName = state.players[chosenIdx];
     setTimeout(() => {
       $('#spinOverlay').classList.add('hidden');
       openChoice(winnerName);
@@ -279,6 +304,11 @@
     $('#choiceAction').classList.toggle('locked', !!lockAction);
     $('#truthLock').classList.toggle('hidden', !lockTruth);
     $('#actionLock').classList.toggle('hidden', !lockAction);
+    // подсказка: выбрано 1 раз подряд — предупредить заранее
+    $('#truthHint').textContent = (st && st.type === 'truth' && st.count === 1)
+      ? 'Правда уже выбрана раз подряд. Ещё раз — и в следующий раз её выбрать будет нельзя.' : '';
+    $('#actionHint').textContent = (st && st.type === 'action' && st.count === 1)
+      ? 'Действие уже выбрано раз подряд. Ещё раз — и в следующий раз его выбрать будет нельзя.' : '';
 
     showScreen('screen-choice');
   }
@@ -304,12 +334,15 @@
   /* ══════════ Экран 5: задание ══════════ */
   function reveal(type) {
     state.currentTask = pending[type];
+    state.taskFailed = false;
     const isTruth = type === 'truth';
     $('#revealType').textContent = isTruth ? 'правда' : 'действие';
     $('#revealText').innerHTML = isTruth ? pending.truthHtml : pending.actionHtml;
     revealSound(isTruth);
     app.classList.remove('failed');
     $('#failBanner').classList.add('hidden');
+    $('#actionRow').classList.remove('hidden');
+    $('#btnNext').classList.add('hidden');
     showScreen('screen-reveal');
     startTimer(levelTimerSecs());
   }
@@ -339,21 +372,48 @@
   function stopTimer() { if (state.timerId) { clearInterval(state.timerId); state.timerId = null; } }
 
   function failTask() {
+    if (state.taskFailed) return;
+    state.taskFailed = true;
     stopTimer();
     $('#timerFill').style.width = '0%';
     $('#timerSecs').textContent = '0';
     app.classList.add('failed');
     $('#failBanner').classList.remove('hidden');
+    $('#actionRow').classList.add('hidden');
+    $('#btnNext').classList.remove('hidden');
     failSound();
     vibrate([200, 100, 200, 100, 300]);
   }
 
-  $('#doneBtn').addEventListener('click', () => {
+  /* ── Круги: Выполнил → вылетает до следующего круга; Не выполнил → остаётся ── */
+  function completeTask(done) {
     stopTimer();
     app.classList.remove('failed');
     $('#failBanner').classList.add('hidden');
+    const name = pending.name;
+    if (done) {
+      state.remaining = state.remaining.filter(p => p !== name);
+      store.set('remaining', state.remaining);
+      if (!state.remaining.length) {
+        state.round += 1;
+        state.remaining = [...state.players];
+        store.set('round', state.round);
+        store.set('remaining', state.remaining);
+        toast('Круг завершён! Круг ' + state.round + ' — все снова в колесе');
+      } else {
+        toast(name + ' выбывает до следующего круга. Осталось: ' + state.remaining.length);
+      }
+    } else {
+      vibrate(120);
+      toast(name + ' остаётся в колесе — и пей стопку');
+    }
+    renderHud();
     showScreen('screen-wheel');
-  });
+  }
+
+  $('#btnDone').addEventListener('click', () => completeTask(true));
+  $('#btnFail').addEventListener('click', () => completeTask(false));
+  $('#btnNext').addEventListener('click', () => completeTask(false));
 
   /* ══════════ Настройки ══════════ */
   function openSettings() {
@@ -399,6 +459,7 @@
   syncCarousel(false);
   if (state.players.length < 2) state.players = state.players.concat(['', '']);
   renderPlayers();
+  renderHud();
   showScreen('screen-players');
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
