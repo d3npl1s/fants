@@ -101,12 +101,9 @@
       <p class="reveal-text" id="revealText"></p>
       <button class="task-timer hidden" id="taskTimerBtn"></button>
     </div>
-    <div class="fail-banner hidden" id="failBanner">Время вышло — <b>пей стопку!</b></div>
     <div class="bottom-panel">
-      <div class="timer-row">
-        <svg class="clock-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg>
-        <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
-        <span class="timer-secs" id="timerSecs">60</span>
+      <div class="panel-top">
+        <p class="punish-note">Не выполнил — <b>пей стопку</b><br>и остаёшься в колесе</p>
         <button class="panel-btn" id="ttsBtn" aria-label="Прочитать задание голосом">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4l5 1 11 5V4L8 9l-5 1z"/><path d="M19 9a4 4 0 0 1 0 6"/></svg>
         </button>
@@ -115,7 +112,6 @@
           <svg id="soundOffIcon" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m16 9 6 6"/><path d="m22 9-6 6"/></svg>
         </button>
       </div>
-      <p class="punish-note">Не выполнил или не успел — <b>пей стопку</b> и остаёшься в колесе</p>
       <div class="action-row" id="actionRow">
         <button class="act-btn ok" id="btnDone"><span>Выполнил</span></button>
         <button class="act-btn no" id="btnFail"><span>Не выполнил</span></button>

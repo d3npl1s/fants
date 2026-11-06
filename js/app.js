@@ -28,10 +28,8 @@
     chosen: store.get('chosen', {}),        // имя → { truth: [], action: [] } — уже выпадавшие игроку
     streaks: {},          // имя игрока -> { type, count } — лимит «2 раза подряд»
     bags: {},             // мешки заданий без повторов
-    timerId: null,
     taskTimerId: null,
     spinning: false,
-    taskFailed: false,
     currentTask: null,
     currentPlain: ''
   };
@@ -67,6 +65,7 @@
   };
   const failSound = () => { beep(196, .3, 'sawtooth', .18); beep(147, .45, 'sawtooth', .18, .3); };
   const vibrate = p => { if (navigator.vibrate) navigator.vibrate(p); };
+  // примечание: failSound оставлен на будущее (сейчас провал — только по кнопке)
 
   /* ── Озвучка заданий (системный речевой синтез) ── */
   let ruVoice = null;
@@ -475,7 +474,6 @@
   /* ══════════ Экран 5: задание ══════════ */
   function reveal(type) {
     state.currentTask = pending[type];
-    state.taskFailed = false;
     const isTruth = type === 'truth';
     $('#revealType').textContent = isTruth ? 'правда' : 'действие';
     let html = isTruth ? pending.truthHtml : pending.actionHtml;
@@ -497,58 +495,15 @@
     $('#revealText').innerHTML = html;
     state.currentPlain = plain;
     revealSound(isTruth);
-    app.classList.remove('failed');
-    $('#failBanner').classList.add('hidden');
-    $('#actionRow').classList.remove('hidden', 'timed-out');
     showScreen('screen-reveal');
-    startTimer(levelTimerSecs());
     speak(plain);                       // диктор читает задание
   }
 
-  const levelTimerSecs = () => {
-    const lv = DATA.levels.find(l => l.id === state.level);
-    return (lv && lv.timer) || 60;
-  };
-
-  function startTimer(sec) {
-    stopTimer();
-    const fill = $('#timerFill'), secs = $('#timerSecs');
-    fill.style.transition = 'none';
-    fill.style.width = '100%';
-    secs.textContent = sec;
-    void fill.offsetWidth;
-    fill.style.transition = 'width 1s linear';
-    const endAt = Date.now() + sec * 1000;
-    state.timerId = setInterval(() => {
-      const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
-      secs.textContent = left;
-      fill.style.width = (Math.max(0, endAt - Date.now()) / (sec * 1000) * 100) + '%';
-      if (left <= 5 && left > 0) beep(660, .07, 'square', .1);   // тик-так на последних секундах
-      if (left <= 0) failTask();
-    }, 1000);
-  }
-  function stopTimer() { if (state.timerId) { clearInterval(state.timerId); state.timerId = null; } }
-
-  function failTask() {
-    if (state.taskFailed) return;
-    state.taskFailed = true;
-    stopTimer();
-    $('#timerFill').style.width = '0%';
-    $('#timerSecs').textContent = '0';
-    app.classList.add('failed');
-    $('#failBanner').classList.remove('hidden');
-    // «Выполнил» остаётся (можно не успеть нажать), «Не выполнил» — акцент
-    $('#actionRow').classList.add('timed-out');
-    failSound();
-    vibrate([200, 100, 200, 100, 300]);
-  }
+  // автоматический таймер уровня убран: время — только там, где задаёт само задание ([[таймер N]])
 
   /* ── Круги: Выполнил → вылетает до следующего круга; Не выполнил → остаётся ── */
   function completeTask(done) {
-    stopTimer();
     stopSpeak();
-    app.classList.remove('failed');
-    $('#failBanner').classList.add('hidden');
     const name = pending.name;
     if (done) {
       state.remaining = state.remaining.filter(p => p !== name);
