@@ -227,6 +227,14 @@ body {
 }
 .corner-back svg { width: 26px; height: 26px; }
 .corner-back:active { transform: scale(.92); }
+.corner-stats {
+  position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); left: 78px;
+  width: 52px; height: 52px; border: none; border-radius: 14px; cursor: pointer;
+  background: var(--navy); color: #fff; z-index: 6;
+  box-shadow: var(--shadow); display: grid; place-items: center;
+}
+.corner-stats svg { width: 24px; height: 24px; }
+.corner-stats:active { transform: scale(.92); }
 
 .wheel-hud {
   position: absolute; top: calc(env(safe-area-inset-top, 0px) + 82px); left: 50%; transform: translateX(-50%);

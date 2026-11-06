@@ -318,6 +318,7 @@
 
   /* ══════════ Экран 3: колесо ══════════ */
   $('#backToLevels').addEventListener('click', () => { showScreen('screen-levels'); syncCarousel(); });
+  $('#statsWheelBtn').addEventListener('click', () => renderStats('Статистика'));
   $('#spinBtn').addEventListener('click', spin);
 
   // свайп в любом месте экрана запускает колесо — как продолжение жеста (палец или мышь)

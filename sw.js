@@ -1,5 +1,5 @@
 /* Фанты — офлайн-кеш */
-const CACHE = 'fant-v11';
+const CACHE = 'fant-v12';
 const ASSETS = [
   './', './index.html',
   './css/style.css', './js/data.js', './js/app.js',
