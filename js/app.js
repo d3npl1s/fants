@@ -10,6 +10,11 @@
     '#21265c', '#c2185b', '#6a1fa2', '#0e7c86', '#d84315', '#2e7d32',
     '#37474f', '#ad1457', '#4527a0', '#00695c', '#8d6e63', '#b71c1c'
   ];
+  const BLITZ_SECS = 180;   // блиц-круг: 3 минуты на круг
+  const MODS = [            // случайные модификаторы к действиям
+    'шёпотом', 'с акцентом', 'стоя на одной ноге', 'с каменным лицом',
+    'как робот', 'максимально драматично', 'в замедленной съёмке', 'не моргая'
+  ];
 
   /* ── Хранилище ── */
   const store = {
@@ -26,6 +31,12 @@
     tts: store.get('tts', true),            // озвучка заданий диктором
     genders: store.get('genders', {}),      // имя → 'm' | 'f' | '' — только для окончаний
     chosen: store.get('chosen', {}),        // имя → { truth: [], action: [] } — уже выпадавшие игроку
+    punish: store.get('punish', 'пей стопку'),
+    blacklist: store.get('blacklist', []),  // задания, исключённые компанией
+    stats: store.get('stats', {}),          // имя → { truth, action, done, fails }
+    blitz: store.get('blitz', false),
+    blitzEndsAt: 0,
+    blitzTimerId: null,
     streaks: {},          // имя игрока -> { type, count } — лимит «2 раза подряд»
     bags: {},             // мешки заданий без повторов
     taskTimerId: null,
@@ -145,6 +156,7 @@
     store.set('round', state.round);
     store.set('remaining', state.remaining);
     renderHud();
+    startBlitzClock();
   }
   // при загрузке: remaining должен соответствовать текущим игрокам
   if (!Array.isArray(state.remaining) || !state.remaining.length ||
@@ -154,6 +166,45 @@
   function renderHud() {
     $('#hudRound').textContent = 'Круг ' + state.round;
     $('#hudLeft').textContent = 'в колесе ' + state.remaining.length + ' из ' + state.players.length;
+    $('#hudBlitz').classList.toggle('hidden', !state.blitz);
+  }
+
+  /* ── Блиц-круг: 3 минуты на весь круг, не успел — наказание ── */
+  const newStats = () => ({ truth: 0, action: 0, done: 0, fails: 0 });
+  function startBlitzClock() {
+    clearInterval(state.blitzTimerId);
+    if (!state.blitz) { $('#hudBlitz').classList.add('hidden'); return; }
+    state.blitzEndsAt = Date.now() + BLITZ_SECS * 1000;
+    state.blitzTimerId = setInterval(tickBlitz, 500);
+    tickBlitz();
+  }
+  function tickBlitz() {
+    if (!state.blitz) return;
+    const left = Math.max(0, Math.round((state.blitzEndsAt - Date.now()) / 1000));
+    const hb = $('#hudBlitz');
+    hb.textContent = 'блиц ' + fmtTime(left);
+    if (left <= 0) blitzExpire();
+  }
+  function blitzExpire() {
+    clearInterval(state.blitzTimerId);
+    stopSpeak();
+    const laggards = state.remaining.slice();
+    laggards.forEach(nm => {
+      if (!state.stats[nm]) state.stats[nm] = newStats();
+      state.stats[nm].fails++;
+    });
+    store.set('stats', state.stats);
+    state.round += 1;
+    state.remaining = [...state.players];
+    store.set('round', state.round);
+    store.set('remaining', state.remaining);
+    pending = null;
+    renderHud();
+    showScreen('screen-wheel');
+    toast(laggards.length
+      ? 'Блиц-время! ' + laggards.join(', ') + ' — ' + state.punish
+      : 'Блиц-время вышло!');
+    startBlitzClock();
   }
 
   /* ══════════ Экран 1: игроки ══════════ */
@@ -299,18 +350,19 @@
     if (!state.bags[bagKey] || !state.bags[bagKey].length) {
       state.bags[bagKey] = [...DATA.tasks[level][type]].sort(() => Math.random() - .5);
     }
-    // то, что игрок уже ВЫБИРАЛ, ему снова не выпадает; не выбранное — может
+    // чёрный список компании + то, что игрок уже ВЫБИРАЛ, не выпадает; не выбранное — может
     const chosenBy = (state.chosen[playerName] || {})[type] || [];
     const skipped = [];
     let text = null;
     while (state.bags[bagKey].length) {
       const t = state.bags[bagKey].pop();
-      if (chosenBy.includes(t)) { skipped.push(t); continue; }
+      if (state.blacklist.includes(t) || chosenBy.includes(t)) { skipped.push(t); continue; }
       text = t; break;
     }
     if (text === null) {                    // игрок уже прошёл всё — разрешаем повторы
-      state.bags[bagKey] = skipped;
-      text = state.bags[bagKey].pop() || DATA.tasks[level][type][0];
+      state.bags[bagKey] = skipped.filter(t => !state.blacklist.includes(t));
+      const pool = state.bags[bagKey].length ? state.bags[bagKey] : DATA.tasks[level][type].filter(t => !state.blacklist.includes(t));
+      text = pool[Math.floor(Math.random() * pool.length)] || DATA.tasks[level][type][0];
     } else {
       skipped.forEach(t => state.bags[bagKey].unshift(t));
     }
@@ -407,10 +459,16 @@
   let pending = null;   // { name, truth, action }
 
   function openChoice(name) {
+    let aTask = drawTask(state.level, 'action', name);
+    // случайный модификатор к действию (не для заданий со своим таймером)
+    if (!/\[\[таймер/.test(aTask) && Math.random() < .3) {
+      const mod = MODS[Math.floor(Math.random() * MODS.length)];
+      aTask = aTask.replace(/\.?$/, '') + ' — и всё это ' + mod + '.';
+    }
     pending = {
       name,
       truth: drawTask(state.level, 'truth', name),
-      action: drawTask(state.level, 'action', name)
+      action: aTask
     };
     $('#choiceName').textContent = name;
     // текст и «случайный друг» фиксируются один раз: превью = то, что получишь после выбора
@@ -463,11 +521,14 @@
   $('#choiceAction').addEventListener('click', () => choose('action'));
 
   function choose(type) {
-    if (!pending) return;
+    if (!pending || banOpen) return;   // клик после зажатия не выбирает
     const st = state.streaks[pending.name];
     if (st && st.type === type) st.count += 1;
     else state.streaks[pending.name] = { type, count: 1 };
     markChosen(pending.name, type, pending[type]);   // выбранное больше не выпадет этому игроку
+    if (!state.stats[pending.name]) state.stats[pending.name] = newStats();
+    state.stats[pending.name][type === 'truth' ? 'truth' : 'action']++;
+    store.set('stats', state.stats);
     reveal(type);
   }
 
@@ -494,6 +555,7 @@
 
     $('#revealText').innerHTML = html;
     state.currentPlain = plain;
+    $('#punishNote').innerHTML = 'Не выполнил — <b>' + esc(state.punish) + '</b><br>и остаёшься в колесе';
     revealSound(isTruth);
     showScreen('screen-reveal');
     speak(plain);                       // диктор читает задание
@@ -505,7 +567,9 @@
   function completeTask(done) {
     stopSpeak();
     const name = pending.name;
+    if (!state.stats[name]) state.stats[name] = newStats();
     if (done) {
+      state.stats[name].done++;
       state.remaining = state.remaining.filter(p => p !== name);
       store.set('remaining', state.remaining);
       if (!state.remaining.length) {
@@ -513,14 +577,21 @@
         state.remaining = [...state.players];
         store.set('round', state.round);
         store.set('remaining', state.remaining);
-        toast('Круг завершён! Круг ' + state.round + ' — все снова в колесе');
-      } else {
-        toast(name + ' выбывает до следующего круга. Осталось: ' + state.remaining.length);
+        renderHud();
+        store.set('stats', state.stats);
+        renderStats('Круг ' + (state.round - 1) + ' завершён');
+        startBlitzClock();
+        showScreen('screen-wheel');
+        return;
       }
+      toast(name + ' выбывает до следующего круга. Осталось: ' + state.remaining.length);
     } else {
+      state.stats[name].fails++;
+      store.set('stats', state.stats);
       vibrate(120);
-      toast(name + ' остаётся в колесе — и пей стопку');
+      toast(name + ' остаётся в колесе — ' + state.punish);
     }
+    store.set('stats', state.stats);
     renderHud();
     showScreen('screen-wheel');
   }
@@ -558,6 +629,8 @@
     $('#setPlayersCount').textContent = state.players.length || '—';
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
     $('#setTtsState').textContent = state.tts ? 'Вкл' : 'Выкл';
+    $('#setBlitzState').textContent = state.blitz ? 'Вкл' : 'Выкл';
+    $('#punishInput').value = state.punish;
     $('#settingsModal').classList.remove('hidden');
   }
   function renderChips() {
@@ -586,6 +659,24 @@
     if (!state.tts) stopSpeak();
     else toast('Диктор озвучит следующее задание');
   });
+  $('#setBlitzBtn').addEventListener('click', () => {
+    state.blitz = !state.blitz; store.set('blitz', state.blitz);
+    $('#setBlitzState').textContent = state.blitz ? 'Вкл' : 'Выкл';
+    if (state.blitz) { startBlitzClock(); toast('Блиц: ' + (BLITZ_SECS / 60) + ' минуты на круг — не успел, ' + state.punish); }
+    else { clearInterval(state.blitzTimerId); renderHud(); toast('Блиц выключен'); }
+  });
+  $('#punishInput').addEventListener('input', () => {
+    const v = $('#punishInput').value.trim();
+    state.punish = v || 'пей стопку';
+    store.set('punish', state.punish);
+  });
+  $('#punishInput').addEventListener('blur', () => {
+    $('#punishInput').value = state.punish;
+  });
+  $('#setStatsBtn').addEventListener('click', () => {
+    $('#settingsModal').classList.add('hidden');
+    renderStats('Статистика');
+  });
 
   function syncSoundIcons() {
     $('#soundOnIcon').classList.toggle('hidden', !state.sound);
@@ -597,6 +688,71 @@
 
   $('#crownBtn').addEventListener('click', () => toast('Премиум здесь не нужен — всё и так бесплатно'));
 
+  /* ── Статистика ── */
+  function renderStats(title) {
+    $('#statsTitle').textContent = title;
+    const rows = state.players.map(nm => ({ nm, ...(state.stats[nm] || newStats()) }));
+    const top = rows.slice().sort((a, b) => b.done - a.done)[0];
+    $('#statsTable').innerHTML = rows.map(r =>
+      `<div class="stats-row"><b>${esc(r.nm)}</b><span>правда: ${r.truth} · действие: ${r.action} · сделано: ${r.done}</span><span>${esc(state.punish)}: ${r.fails}</span></div>`
+    ).join('') + (top && top.done ? `<p class="stats-kings">Король мангала: ${esc(top.nm)} — ${top.done}</p>` : '');
+    $('#statsModal').classList.remove('hidden');
+  }
+  $('#statsCloseBtn').addEventListener('click', () => $('#statsModal').classList.add('hidden'));
+  $('#statsModal').addEventListener('click', e => { if (e.target.id === 'statsModal') e.currentTarget.classList.add('hidden'); });
+  $('#statsResetBtn').addEventListener('click', () => {
+    state.stats = {}; store.set('stats', state.stats);
+    renderStats('Статистика');
+    toast('Статистика сброшена');
+  });
+
+  /* ── Долгое нажатие на карточке: убрать задание из игры ── */
+  let banOpen = false, lpTimer = null, lpPos = null;
+  function showBanPopup(type, x, y) {
+    banOpen = true;
+    const p = $('#banPopup');
+    p.dataset.type = type;
+    const w = 280, h = 150;
+    p.style.left = Math.max(10, Math.min(x - w / 2, window.innerWidth - w - 10)) + 'px';
+    p.style.top = Math.max(60, Math.min(y - 30, window.innerHeight - h - 10)) + 'px';
+    p.classList.remove('hidden');
+  }
+  function hideBanPopup() {
+    banOpen = false;
+    $('#banPopup').classList.add('hidden');
+  }
+  ['choiceTruth', 'choiceAction'].forEach(id => {
+    const card = $('#' + id);
+    const type = id === 'choiceTruth' ? 'truth' : 'action';
+    card.addEventListener('pointerdown', e => {
+      if (!e.isPrimary) return;
+      lpPos = { x: e.clientX, y: e.clientY };
+      lpTimer = setTimeout(() => {
+        lpTimer = null;
+        vibrate(40);
+        showBanPopup(type, lpPos.x, lpPos.y);
+      }, 550);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+      card.addEventListener(ev, () => clearTimeout(lpTimer)));
+  });
+  $('#banYes').addEventListener('click', () => {
+    const type = $('#banPopup').dataset.type;
+    if (pending && pending[type]) {
+      const t = pending[type];
+      if (!state.blacklist.includes(t)) state.blacklist.push(t);
+      store.set('blacklist', state.blacklist);
+      state.bags = {};                                   // пересобрать мешки без убранного
+      pending[type] = drawTask(state.level, type, pending.name);
+      const r = renderTemplate(pending[type], pending.name, pickOther(pending.name));
+      pending[type + 'Html'] = r.html; pending[type + 'Plain'] = r.plain;
+      $(type === 'truth' ? '#truthPreview' : '#actionPreview').innerHTML = r.html;
+      toast('Задание убрано из игры');
+    }
+    hideBanPopup();
+  });
+  $('#banNo').addEventListener('click', hideBanPopup);
+
   /* ── Старт: всегда с игроков ── */
   buildCarousel();
   syncSoundIcons();
@@ -604,6 +760,7 @@
   if (state.players.length < 2) state.players = state.players.concat(['', '']);
   renderPlayers();
   renderHud();
+  if (state.blitz) startBlitzClock();
   showScreen('screen-players');
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

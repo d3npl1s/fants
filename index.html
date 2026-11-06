@@ -60,7 +60,7 @@
     <button class="corner-back" id="backToLevels" aria-label="К выбору уровня">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
     </button>
-    <div class="wheel-hud"><b id="hudRound">Круг 1</b><span class="hud-sep"></span><span id="hudLeft">в колесе 4 из 4</span></div>
+    <div class="wheel-hud"><b id="hudRound">Круг 1</b><span class="hud-sep"></span><b id="hudBlitz" class="hidden"></b><span class="hud-sep"></span><span id="hudLeft">в колесе 4 из 4</span></div>
     <button class="spin-big-btn" id="spinBtn" aria-label="Запустить колесо">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
         <path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>
@@ -103,7 +103,7 @@
     </div>
     <div class="bottom-panel">
       <div class="panel-top">
-        <p class="punish-note">Не выполнил — <b>пей стопку</b><br>и остаёшься в колесе</p>
+        <p class="punish-note" id="punishNote">Не выполнил — <b>пей стопку</b><br>и остаёшься в колесе</p>
         <button class="panel-btn" id="ttsBtn" aria-label="Прочитать задание голосом">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4l5 1 11 5V4L8 9l-5 1z"/><path d="M19 9a4 4 0 0 1 0 6"/></svg>
         </button>
@@ -146,8 +146,39 @@
       <button class="set-row set-btn" id="setTtsBtn">
         <span>Озвучка заданий</span><b id="setTtsState">Вкл</b>
       </button>
+      <button class="set-row set-btn" id="setBlitzBtn">
+        <span>Блиц-круг (3 минуты на круг)</span><b id="setBlitzState">Выкл</b>
+      </button>
+      <div class="set-row punish-edit">
+        <label for="punishInput">Наказание за провал</label>
+        <input id="punishInput" maxlength="60" placeholder="пей стопку">
+      </div>
+      <button class="set-row set-btn" id="setStatsBtn">
+        <span>Статистика</span>
+      </button>
       <p class="set-foot">Домашняя реплика «Фантов» для своих. Некоммерческая</p>
       <button class="modal-close" id="settingsCloseBtn">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- ══════════ Модалка: статистика ══════════ -->
+  <div id="statsModal" class="modal hidden">
+    <div class="modal-card">
+      <h3 id="statsTitle">Статистика</h3>
+      <div id="statsTable"></div>
+      <div class="stats-actions">
+        <button class="stats-reset" id="statsResetBtn">Сбросить</button>
+        <button class="modal-close" id="statsCloseBtn">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ Всплывашка: убрать задание ══════════ -->
+  <div id="banPopup" class="ban-popup hidden">
+    <p>Убрать это задание из игры?</p>
+    <div class="ban-row">
+      <button class="ban-yes" id="banYes">Да, убрать</button>
+      <button class="ban-no" id="banNo">Нет</button>
     </div>
   </div>
 
