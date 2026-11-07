@@ -35,7 +35,9 @@
     genders: store.get('genders', {}),      // имя → 'm' | 'f' | '' — только для окончаний
     chosen: store.get('chosen', {}),        // имя → { truth: [], action: [] } — уже выпадавшие игроку
     punish: store.get('punish', 'пей стопку'),
-    blacklist: store.get('blacklist', []),  // задания, исключённые компанией
+    blacklist: store.get('blacklist', []),  // задания, исключённые компанией (сырые шаблоны)
+    packs: store.get('packs', { kvartirnik: true, dacha: false, ny: false }), // включённые пакеты
+    comboBan: store.get('comboBan', []),    // забаненные скелеты комбо «глагол|объект»
     stats: store.get('stats', {}),          // имя → { truth, action, done, fails }
     blitz: store.get('blitz', false),
     blitzEndsAt: 0,
@@ -45,6 +47,7 @@
     taskTimerId: null,
     spinning: false,
     recent: [],             // последние 2 игрока колеса — чтобы не выпадали подряд
+    recentSkel: [],         // последние 4 скелета комбо — анти-залипание (только сессия)
     currentTask: null,
     currentPlain: ''
   };
@@ -446,16 +449,17 @@
 
   function drawTask(level, type, playerName) {
     // комбинаторика для действий: глагол × объект × формат (шанс ~35%)
-    if (type === 'action') {
-      for (let a = 0; a < 4; a++) {
+    if (type === 'action' && Math.random() < .35) {
+      for (let a = 0; a < 6; a++) {
         const v = COMBO.verbs[Math.floor(Math.random() * COMBO.verbs.length)];
         const o = COMBO.objects[Math.floor(Math.random() * COMBO.objects.length)];
         const f = COMBO.formats[Math.floor(Math.random() * COMBO.formats.length)];
         const skel = v + '|' + o;
-        if (state.recentSkel.includes(skel)) continue;
+        if (state.comboBan.includes(skel) || state.recentSkel.includes(skel)) continue;
         state.recentSkel.push(skel);
         state.recentSkel = state.recentSkel.slice(-4);
-        return '{name}, ' + v + ' ' + o + ' ' + f + '.';
+        // tpl: null — комбо не пишутся в chosen/blacklist, их ведёт recentSkel + comboBan
+        return { text: '{name}, ' + v + ' ' + o + ' ' + f + '.', tpl: null, skel };
       }
     }
     const bagKey = level + ':' + type;
@@ -481,9 +485,12 @@
     } else {
       skipped.forEach(t => state.bags[bagKey].unshift(t));
     }
-    // локальные токены фиксируются при вытяжке — превью и задание совпадают
-    return text.replace(/\{room\}/g, () => ROOMS[Math.floor(Math.random() * ROOMS.length)])
+    // локальные токены фиксируются при вытяжке — превью и задание совпадают;
+    // tpl (сырой шаблон с {room}/{object}) нужен для чёрного списка и «уже выбранного»
+    const tpl = text;
+    text = text.replace(/\{room\}/g, () => ROOMS[Math.floor(Math.random() * ROOMS.length)])
                .replace(/\{object\}/g, () => OBJECTS[Math.floor(Math.random() * OBJECTS.length)]);
+    return { text, tpl };
   }
 
   function markChosen(name, type, text) {
@@ -600,13 +607,14 @@
   }
 
   function openChoice(name) {
-    const aTask = drawTask(state.level, 'action', name);
+    const aDraw = drawTask(state.level, 'action', name);
     // модификатор: явный [[мод:X]] приоритетнее, иначе случайный с шансом 50% (не для таймерных/секретных)
-    const actionMod = pickActionMod(aTask);
+    const actionMod = pickActionMod(aDraw.text);
+    const tDraw = drawTask(state.level, 'truth', name);
     pending = {
       name,
-      truth: drawTask(state.level, 'truth', name),
-      action: aTask,
+      truth: tDraw.text, truthTpl: tDraw.tpl,
+      action: aDraw.text, actionTpl: aDraw.tpl, actionSkel: aDraw.skel || null,
       actionMod
     };
     $('#choiceName').textContent = name;
@@ -672,7 +680,8 @@
     const st = state.streaks[pending.name];
     if (st && st.type === type) st.count += 1;
     else state.streaks[pending.name] = { type, count: 1 };
-    markChosen(pending.name, type, pending[type]);   // выбранное больше не выпадет этому игроку
+    // в chosen идёт сырой шаблон; комбо (tpl: null) не сохраняем — их ведёт recentSkel/comboBan
+    if (pending[type + 'Tpl']) markChosen(pending.name, type, pending[type + 'Tpl']);
     if (!state.stats[pending.name]) state.stats[pending.name] = newStats();
     state.stats[pending.name][type === 'truth' ? 'truth' : 'action']++;
     store.set('stats', state.stats);
@@ -850,9 +859,6 @@
   };
   // накопительные средние оценки по игрокам: { имя: { sum, count } }
   let phStats = store.get('phStats', {});
-  // пакеты заданий: включённые темы
-  state.packs = store.get('packs', { kvartirnik: true, dacha: false, ny: false });
-  state.recentSkel = [];
 
   function renderModeChips() {
     $('#modeChips').innerHTML = window.PHRASE.modes.map(m =>
@@ -1176,13 +1182,26 @@
   $('#banYes').addEventListener('click', () => {
     const type = $('#banPopup').dataset.type;
     if (pending && pending[type]) {
-      const t = pending[type];
-      if (!state.blacklist.includes(t)) state.blacklist.push(t);
-      store.set('blacklist', state.blacklist);
-      state.bags = {};                                   // пересобрать мешки без убранного
-      pending[type] = drawTask(state.level, type, pending.name);
-      // модификатор замены пересчитывается заново
-      if (type === 'action') pending.actionMod = pickActionMod(pending.action);
+      const tpl = pending[type + 'Tpl'];
+      if (tpl) {
+        // обычное задание: бан по сырому шаблону — только тогда оно реально исчезнет из мешка
+        if (!state.blacklist.includes(tpl)) state.blacklist.push(tpl);
+        store.set('blacklist', state.blacklist);
+        state.bags = {};                                   // пересобрать мешки без убранного
+      } else if (type === 'action' && pending.actionSkel) {
+        // комбинаторное: бан по скелету «глагол|объект» — исчезают все 6 его форматов
+        if (!state.comboBan.includes(pending.actionSkel)) {
+          state.comboBan.push(pending.actionSkel);
+          store.set('comboBan', state.comboBan);
+        }
+      }
+      const nd = drawTask(state.level, type, pending.name);
+      pending[type] = nd.text;
+      pending[type + 'Tpl'] = nd.tpl;
+      if (type === 'action') {
+        pending.actionSkel = nd.skel || null;
+        pending.actionMod = pickActionMod(nd.text);
+      }
       const otherKey = type === 'truth' ? 'otherTruth' : 'otherAction';
       pending[otherKey] = pickOther(pending.name);
       const r = renderTemplate(pending[type], pending.name, pending[otherKey]);
