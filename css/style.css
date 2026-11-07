@@ -544,11 +544,16 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
   padding: calc(env(safe-area-inset-top, 0px) + 74px) 20px calc(env(safe-area-inset-bottom, 0px) + 22px);
 }
+/* кластер управления: подпись + кнопки, прижаты к низу под большой палец */
+.ph-controls {
+  margin-top: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  width: 100%;
+}
+#pairSpinBtn, #phraseGoBtn { flex: 0 0 auto; }
+#pairSpinBtn.hidden, #phraseGoBtn.hidden { display: none; }
 .pair-cols { display: flex; gap: 20px; margin-top: 18px; }
 .pair-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-#pairCaption { margin-top: auto; }
-#phraseGoBtn, #pairSpinBtn { flex: 0 0 auto; }
-#pairSpinBtn { margin-bottom: 2px; }
 .pair-role {
   font-size: 15px; font-weight: 800; letter-spacing: 3px;
   background: rgba(33,38,92,.75); border-radius: 20px; padding: 6px 16px;
@@ -567,7 +572,7 @@ button.set-btn b { opacity: .85; font-weight: 800; }
 #pairSpinBtn { width: 128px; height: 128px; }
 #pairSpinBtn svg { width: 58px; height: 58px; }
 #phraseGoBtn {
-  position: static; transform: none; margin-top: 14px;
+  position: static; transform: none; margin-top: 0;
   width: 100%; max-width: 340px; padding: 22px 20px; font-size: 24px;
 }
 #pairCaption {
