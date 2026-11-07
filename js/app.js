@@ -521,9 +521,11 @@
 
   function openChoice(name) {
     const aTask = drawTask(state.level, 'action', name);
-    // случайный модификатор к действию (не для заданий со своим таймером), шанс 50%
+    // модификатор: явный [[мод:X]] приоритетнее, иначе случайный с шансом 50% (не для таймерных)
     let actionMod = null;
-    if (!/\[\[таймер/.test(aTask) && Math.random() < .5) {
+    const modOverride = aTask.match(/\[\[мод:([^\]]+)\]\]/);
+    if (modOverride) actionMod = modOverride[1].trim();
+    else if (!/\[\[таймер/.test(aTask) && !/\[\[мод:/.test(aTask) && Math.random() < .5) {
       actionMod = MODS[Math.floor(Math.random() * MODS.length)];
     }
     pending = {
@@ -569,6 +571,8 @@
       tpl = tpl.replace(/\(([^()]+)\|([^()]+)\)/g, '$1');
       tpl = tpl.replace(/\((а|ась|ся|ись|ла)\)/g, '');
     }
+    // служебные токены в превью не показываем
+    tpl = tpl.replace(/\s*\[\[таймер \d+\]\]/g, '').replace(/\s*\[\[тайно\]\]/g, '').replace(/\s*\[\[мод:[^\]]+\]\]/g, '');
     // падежные токены: {other-acc} = кого, {other-dat} = кому, {other-inst} = с кем, {other-gen} = кого/чего
     const v = {
       'name': name, 'other': other,
@@ -614,6 +618,8 @@
       html = html.replace(/\s*\[\[тайно\]\]/g, '');
       plain = plain.replace(/\s*\[\[тайно\]\]/g, '');
     }
+    html = html.replace(/\s*\[\[мод:[^\]]+\]\]/g, '');
+    plain = plain.replace(/\s*\[\[мод:[^\]]+\]\]/g, '');
 
     // таймер задания: явный [[таймер N]] или длительность в тексте («на 15 секунд», «2 минуты»)
     const m = plain.match(/\[\[таймер (\d+)\]\]/);
