@@ -236,8 +236,18 @@
         if (nv && old && nv !== old) {
           [['genders'], ['chosen'], ['stats'], ['phStats']].forEach(([k]) => {
             const obj = store.get(k, {});
-            if (obj[old] !== undefined) { obj[nv] = obj[old]; delete obj[old]; store.set(k, obj); }
+            if (obj[old] !== undefined) {
+              if (obj[nv] === undefined) obj[nv] = obj[old];   // не затираем чужие данные
+              delete obj[old];
+              store.set(k, obj);
+            }
           });
+          // обновляем оперативные копии, чтобы пол/статистика не «слетали» до перезагрузки
+          state.genders = store.get('genders', {});
+          state.chosen = store.get('chosen', {});
+          state.stats = store.get('stats', {});
+          phStats = store.get('phStats', {});
+          renderPlayers();
         }
         state.players[i] = nv;
         store.set('players', state.players);
@@ -538,15 +548,17 @@
   /* ══════════ Экран 4: выбор правда / действие ══════════ */
   let pending = null;   // { name, truth, action }
 
+  function pickActionMod(taskText) {
+    const o = taskText.match(/\[\[мод:([^\]]+)\]\]/);
+    if (o) return o[1].trim();
+    if (/\[\[таймер/.test(taskText) || /\[\[тайно\]\]/.test(taskText) || /\[\[мод:/.test(taskText)) return null;
+    return Math.random() < .5 ? MODS[Math.floor(Math.random() * MODS.length)] : null;
+  }
+
   function openChoice(name) {
     const aTask = drawTask(state.level, 'action', name);
-    // модификатор: явный [[мод:X]] приоритетнее, иначе случайный с шансом 50% (не для таймерных)
-    let actionMod = null;
-    const modOverride = aTask.match(/\[\[мод:([^\]]+)\]\]/);
-    if (modOverride) actionMod = modOverride[1].trim();
-    else if (!/\[\[таймер/.test(aTask) && !/\[\[мод:/.test(aTask) && Math.random() < .5) {
-      actionMod = MODS[Math.floor(Math.random() * MODS.length)];
-    }
+    // модификатор: явный [[мод:X]] приоритетнее, иначе случайный с шансом 50% (не для таймерных/секретных)
+    const actionMod = pickActionMod(aTask);
     pending = {
       name,
       truth: drawTask(state.level, 'truth', name),
@@ -554,9 +566,11 @@
       actionMod
     };
     $('#choiceName').textContent = name;
-    // текст и «случайный друг» фиксируются один раз: превью = то, что получишь после выбора
-    const t = renderTemplate(pending.truth, name, pickOther(name));
-    const a = renderTemplate(pending.action, name, pickOther(name));
+    // «случайный друг» фиксируется один раз: превью = то, что получишь после выбора
+    pending.otherTruth = pickOther(name);
+    pending.otherAction = pickOther(name);
+    const t = renderTemplate(pending.truth, name, pending.otherTruth);
+    const a = renderTemplate(pending.action, name, pending.otherAction);
     pending.truthHtml = t.html; pending.truthPlain = t.plain;
     pending.actionHtml = a.html; pending.actionPlain = a.plain;
     $('#truthPreview').innerHTML = t.html;
@@ -667,8 +681,9 @@
       plate.classList.toggle('hidden', secret);
     } else plate.classList.add('hidden');
 
-    // рендер уже вычищает все служебные токены
-    const r = renderTemplate(raw, pending.name, pickOther(pending.name));
+    // рендер уже вычищает все служебные токены; other тот же, что был в превью
+    const chosenOther = isTruth ? pending.otherTruth : pending.otherAction;
+    const r = renderTemplate(raw, pending.name, chosenOther);
     let plain = r.plain;
     if (mod && !secret) plain = plain.replace(/\.?\s*$/, '') + '. Условие: ' + mod;
     $('#revealText').innerHTML = r.html;
@@ -963,16 +978,7 @@
 
   /* ── Статистика средних оценок фразы ── */
   function renderPhStats() {
-    const rows = state.players
-      .map(nm => ({ nm, ...(phStats[nm] || { sum: 0, count: 0 }) }))
-      .map(r => ({ ...r, avg: r.count ? r.sum / r.count : 0 }))
-      .sort((a, b) => b.avg - a.avg || b.count - a.count);
-    const best = rows.find(r => r.count);
-    $('#statsTitle').textContent = 'Средние оценки';
-    $('#statsTable').innerHTML = rows.map(r =>
-      `<div class="stats-row"><b>${esc(r.nm)}</b><span>${r.count ? 'средняя: ' + (Math.round(r.avg * 10) / 10) + ' из 5 · оценок: ' + r.count : 'пока без оценок'}</span></div>`
-    ).join('') + (best ? `<p class="stats-kings">Самый уверенный: ${esc(best.nm)}</p>` : '');
-    $('#statsModal').classList.remove('hidden');
+    renderStats('Средние оценки', 'phrase');
   }
   $('#phraseStatsBtn').addEventListener('click', renderPhStats);
   $('#phraseStatsBtn2').addEventListener('click', renderPhStats);
@@ -1056,21 +1062,38 @@
   $('#crownBtn').addEventListener('click', () => toast('Премиум здесь не нужен — всё и так бесплатно'));
 
   /* ── Статистика ── */
-  function renderStats(title) {
+  function renderStats(title, kind = 'fants') {
     $('#statsTitle').textContent = title;
-    const rows = state.players.map(nm => ({ nm, ...(state.stats[nm] || newStats()) }));
-    const top = rows.slice().sort((a, b) => b.done - a.done)[0];
-    $('#statsTable').innerHTML = rows.map(r =>
-      `<div class="stats-row"><b>${esc(r.nm)}</b><span>правда: ${r.truth} · действие: ${r.action} · сделано: ${r.done}</span><span>${esc(state.punish)}: ${r.fails}</span></div>`
-    ).join('') + (top && top.done ? `<p class="stats-kings">Король мангала: ${esc(top.nm)} — ${top.done}</p>` : '');
+    $('#statsModal').dataset.kind = kind;
+    if (kind === 'phrase') {
+      const rows = state.players
+        .map(nm => ({ nm, ...(phStats[nm] || { sum: 0, count: 0 }) }))
+        .map(r => ({ ...r, avg: r.count ? r.sum / r.count : 0 }))
+        .sort((a, b) => b.avg - a.avg || b.count - a.count);
+      const best = rows.find(r => r.count);
+      $('#statsTable').innerHTML = rows.map(r =>
+        `<div class="stats-row"><b>${esc(r.nm)}</b><span>${r.count ? 'средняя: ' + (Math.round(r.avg * 10) / 10) + ' из 5 · оценок: ' + r.count : 'пока без оценок'}</span></div>`
+      ).join('') + (best ? `<p class="stats-kings">Самый уверенный: ${esc(best.nm)}</p>` : '');
+    } else {
+      const rows = state.players.map(nm => ({ nm, ...(state.stats[nm] || newStats()) }));
+      const top = rows.slice().sort((a, b) => b.done - a.done)[0];
+      $('#statsTable').innerHTML = rows.map(r =>
+        `<div class="stats-row"><b>${esc(r.nm)}</b><span>правда: ${r.truth} · действие: ${r.action} · сделано: ${r.done}</span><span>${esc(state.punish)}: ${r.fails}</span></div>`
+      ).join('') + (top && top.done ? `<p class="stats-kings">Король мангала: ${esc(top.nm)} — ${top.done}</p>` : '');
+    }
     $('#statsModal').classList.remove('hidden');
   }
   $('#statsCloseBtn').addEventListener('click', () => $('#statsModal').classList.add('hidden'));
   $('#statsModal').addEventListener('click', e => { if (e.target.id === 'statsModal') e.currentTarget.classList.add('hidden'); });
   $('#statsResetBtn').addEventListener('click', () => {
-    state.stats = {}; store.set('stats', state.stats);
-    renderStats('Статистика');
-    toast('Статистика сброшена');
+    const kind = $('#statsModal').dataset.kind || 'fants';
+    if (kind === 'phrase') {
+      phStats = {}; store.set('phStats', phStats);
+    } else {
+      state.stats = {}; store.set('stats', state.stats);
+    }
+    renderStats(kind === 'phrase' ? 'Средние оценки' : 'Статистика', kind);
+    toast(kind === 'phrase' ? 'Оценки сброшены' : 'Статистика сброшена');
   });
 
   /* ── Долгое нажатие на карточке: убрать задание из игры ── */
@@ -1111,7 +1134,11 @@
       store.set('blacklist', state.blacklist);
       state.bags = {};                                   // пересобрать мешки без убранного
       pending[type] = drawTask(state.level, type, pending.name);
-      const r = renderTemplate(pending[type], pending.name, pickOther(pending.name));
+      // модификатор замены пересчитывается заново
+      if (type === 'action') pending.actionMod = pickActionMod(pending.action);
+      const otherKey = type === 'truth' ? 'otherTruth' : 'otherAction';
+      pending[otherKey] = pickOther(pending.name);
+      const r = renderTemplate(pending[type], pending.name, pending[otherKey]);
       pending[type + 'Html'] = r.html; pending[type + 'Plain'] = r.plain;
       $(type === 'truth' ? '#truthPreview' : '#actionPreview').innerHTML = r.html;
       toast('Задание убрано из игры');
