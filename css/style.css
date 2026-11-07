@@ -544,12 +544,13 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
   padding: calc(env(safe-area-inset-top, 0px) + 74px) 20px calc(env(safe-area-inset-bottom, 0px) + 22px);
 }
-/* кластер управления: подпись + кнопки, прижаты к низу под большой палец */
+/* кластер управления: прибит АБСОЛЮТНО к низу экрана — никакие флексы не сдвинут */
 .ph-controls {
-  margin-top: auto;
+  position: absolute; left: 20px; right: 20px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
   display: flex; flex-direction: column; align-items: center; gap: 14px;
-  width: 100%;
 }
+#pairCaption { margin-top: 0; }
 #pairSpinBtn, #phraseGoBtn { flex: 0 0 auto; }
 #pairSpinBtn.hidden, #phraseGoBtn.hidden { display: none; }
 .pair-cols { display: flex; gap: 20px; margin-top: 18px; }
