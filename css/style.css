@@ -608,6 +608,23 @@ button.set-btn b { opacity: .85; font-weight: 800; }
 .ph-task-meta { font-size: 15px; font-weight: 800; letter-spacing: 1px; opacity: .92; text-transform: uppercase; }
 .screen-phrase-task .reveal-text { font-size: 28px; }
 
+/* пояснение к заданию */
+.hint-btn {
+  width: 46px; height: 46px; border: 2px solid rgba(255,255,255,.55); border-radius: 50%;
+  background: rgba(24, 27, 66, .5); color: #fff; font-family: inherit;
+  font-size: 22px; font-weight: 800; cursor: pointer; box-shadow: var(--shadow);
+}
+.hint-btn:active { transform: scale(.92); }
+.hint-box {
+  width: 100%; max-width: 420px; background: rgba(24, 27, 66, .55); backdrop-filter: blur(6px);
+  border-radius: 14px; padding: 14px 16px; text-align: left;
+}
+.hint-text { font-size: 15px; font-weight: 600; line-height: 1.45; opacity: .95; }
+.hint-close {
+  margin-top: 8px; border: none; background: transparent; color: rgba(255,255,255,.6);
+  font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: underline;
+}
+
 /* секретные задания */
 .secret-box {
   display: flex; flex-direction: column; align-items: center; gap: 14px;

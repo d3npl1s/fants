@@ -448,18 +448,20 @@
   }
 
   function drawTask(level, type, playerName) {
-    // комбинаторика для действий: глагол × объект × формат (шанс ~35%)
+    // комбинаторика для действий: объект × совместимый глагол × формат (шанс ~35%)
     if (type === 'action' && Math.random() < .35) {
       for (let a = 0; a < 6; a++) {
-        const v = COMBO.verbs[Math.floor(Math.random() * COMBO.verbs.length)];
-        const o = COMBO.objects[Math.floor(Math.random() * COMBO.objects.length)];
-        const f = COMBO.formats[Math.floor(Math.random() * COMBO.formats.length)];
-        const skel = v + '|' + o;
+        const obj = COMBO.objects[Math.floor(Math.random() * COMBO.objects.length)];
+        const v = obj.verbs[Math.floor(Math.random() * obj.verbs.length)];
+        const fm = COMBO.formats[Math.floor(Math.random() * COMBO.formats.length)];
+        const skel = v + '|' + obj.o;
         if (state.comboBan.includes(skel) || state.recentSkel.includes(skel)) continue;
         state.recentSkel.push(skel);
         state.recentSkel = state.recentSkel.slice(-4);
-        // tpl: null — комбо не пишутся в chosen/blacklist, их ведёт recentSkel + comboBan
-        return { text: '{name}, ' + v + ' ' + o + ' ' + f + '.', tpl: null, skel };
+        // «без слов» — секретная пантомима (крокодил) с таймером на подумать
+        const tokens = fm.secret ? ' [[тайно]] [[таймер ' + fm.timer + ']]' : '';
+        // tpl: null — комбо не пишутся в chosen/blacklist, их ведут recentSkel + comboBan
+        return { text: '{name}, ' + v + ' ' + obj.o + ' ' + fm.f + '.' + tokens, tpl: null, skel };
       }
     }
     const bagKey = level + ':' + type;
@@ -550,9 +552,9 @@
     if (opts.swipe) {                     // свайп: лента сразу летит, как продолжение жеста
       ease = t => 1 - Math.pow(1 - t, 3);
       dur = Math.min(5500, Math.max(1500, 3 * Math.abs(dist) / (opts.v || 3)));
-    } else {                              // тап: максимально короткий прогон
-      ease = t => 1 - Math.pow(1 - t, 3);
-      dur = 750 + Math.random() * 200;
+    } else {                              // тап: разгон с места, коротко
+      ease = t => t < .5 ? 8 * t * t * t * t : 1 - 8 * Math.pow(1 - t, 4);
+      dur = 1200 + Math.random() * 200;
     }
     const t0 = performance.now();
     let lastIdx = -1;
@@ -625,6 +627,7 @@
     const a = renderTemplate(pending.action, name, pending.otherAction);
     $('#truthPreview').innerHTML = t.html;
     $('#actionPreview').innerHTML = a.html;
+    speak(name + ', правда или действие?');
 
     // лимит: тот же вариант не больше 2 раз подряд (сброс — выбором противоположного)
     const st = state.streaks[name];
@@ -655,7 +658,7 @@
       tpl = tpl.replace(/\((а|ась|ся|ись|ла)\)/g, '');
     }
     // служебные токены в превью не показываем
-    tpl = tpl.replace(/\s*\[\[таймер \d+\]\]/g, '').replace(/\s*\[\[тайно\]\]/g, '').replace(/\s*\[\[мод:[^\]]+\]\]/g, '');
+    tpl = tpl.replace(/\s*\[\[таймер \d+\]\]/g, '').replace(/\s*\[\[тайно\]\]/g, '').replace(/\s*\[\[мод:[^\]]+\]\]/g, '').replace(/\s*\[\[пояснение:[^\]]+\]\]/g, '');
     // падежные токены: {other-acc} = кого, {other-dat} = кому, {other-inst} = с кем, {other-gen} = кого/чего
     const v = {
       'name': name, 'other': other,
@@ -722,6 +725,13 @@
       tb.dataset.secs = '';
       tb.classList.add('hidden');
     }
+
+    // пояснение: [[пояснение:X]] — кнопка «?» рядом с заданием
+    const h = raw.match(/\[\[пояснение:([^\]]+)\]\]/);
+    const hb = $('#hintBtn'), hbx = $('#hintBox');
+    hbx.classList.add('hidden');
+    if (h) { hb.classList.remove('hidden'); state.currentHint = h[1]; }
+    else { hb.classList.add('hidden'); state.currentHint = ''; }
 
     // плашка модификатора к действию
     const mod = !isTruth ? pending.actionMod : null;
@@ -826,6 +836,17 @@
 
   /* ── Повтор озвучки ── */
   $('#ttsBtn').addEventListener('click', () => speak(state.currentPlain));
+
+  /* ── Пояснение к заданию ── */
+  $('#hintBtn').addEventListener('click', () => {
+    $('#hintText').textContent = state.currentHint || '';
+    $('#hintBox').classList.remove('hidden');
+    $('#hintBtn').classList.add('hidden');
+  });
+  $('#hintCloseBtn').addEventListener('click', () => {
+    $('#hintBox').classList.add('hidden');
+    $('#hintBtn').classList.remove('hidden');
+  });
 
   /* ── Секретные задания: прочитать → скрыть ── */
   $('#secretReadBtn').addEventListener('click', () => {
