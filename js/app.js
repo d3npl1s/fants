@@ -866,6 +866,7 @@
     const tb = $('#taskTimerBtn');
     if (tb.dataset.secs) tb.classList.remove('hidden');   // таймер показываем только после прочтения
     if (state.currentMod) $('#modPlate').classList.remove('hidden');
+    if (state.currentHint) $('#hintBtn').classList.remove('hidden');
     $('#taskPanel').classList.remove('hidden');
     $('#secretHideBtn').classList.remove('hidden');
     vibrate(40);
