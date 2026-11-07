@@ -450,13 +450,19 @@ button.set-btn b { opacity: .85; font-weight: 800; }
 .game-card {
   min-width: 100%; height: 100%;
   scroll-snap-align: start; scroll-snap-stop: always;
-  display: flex; flex-direction: column; justify-content: center; align-items: center;
-  gap: 18px; padding: 80px 34px 110px; text-align: center;
+  display: flex; flex-direction: column; justify-content: flex-start; align-items: center;
+  gap: 18px; padding: calc(env(safe-area-inset-top, 0px) + 90px) 34px 130px; text-align: center;
   background: linear-gradient(178deg, var(--g1), var(--g2));
 }
 .game-icon { width: 110px; height: 110px; filter: drop-shadow(0 8px 14px rgba(0,0,0,.2)); }
-.game-name { font-size: 46px; font-weight: 800; text-shadow: 0 5px 0 rgba(0,0,0,.18); }
-.game-tag { font-size: 18px; font-weight: 700; line-height: 1.5; max-width: 320px; text-shadow: 0 2px 6px rgba(0,0,0,.18); }
+.game-name {
+  font-size: 46px; font-weight: 800; text-shadow: 0 5px 0 rgba(0,0,0,.18);
+  min-height: 130px; display: flex; align-items: center; justify-content: center;
+}
+.game-tag {
+  font-size: 18px; font-weight: 700; line-height: 1.5; max-width: 320px; text-shadow: 0 2px 6px rgba(0,0,0,.18);
+  min-height: 84px;
+}
 .game-card .play-btn { max-width: 300px; margin-top: 10px; }
 
 /* ═══════════ Игра «Продолжи фразу» ═══════════ */
@@ -486,7 +492,6 @@ button.set-btn b { opacity: .85; font-weight: 800; }
 }
 .stepper button:active { transform: scale(.92); }
 .stepper b { font-size: 44px; font-weight: 800; min-width: 60px; text-align: center; text-shadow: 0 3px 0 rgba(0,0,0,.18); }
-.mode-chips { display: flex; flex-wrap: wrap; gap: 10px; }
 .mode-chips button {
   border: 2px solid rgba(255,255,255,.4); background: rgba(33,38,92,.5); color: #fff;
   border-radius: 14px; padding: 12px 18px; font-family: inherit; font-size: 16px; font-weight: 800; cursor: pointer;
@@ -528,7 +533,11 @@ button.set-btn b { opacity: .85; font-weight: 800; }
 #pairSpinBtn { width: 128px; height: 128px; }
 #pairSpinBtn svg { width: 58px; height: 58px; }
 #phraseGoBtn { position: static; transform: none; margin-top: 14px; }
-#pairCaption { text-align: center; font-size: 20px; font-weight: 800; max-width: 340px; line-height: 1.4; min-height: 56px; display: flex; align-items: center; justify-content: center; }
+#pairCaption {
+  width: 100%; text-align: center; font-size: 20px; font-weight: 800;
+  line-height: 1.4; min-height: 56px; display: flex; align-items: center; justify-content: center;
+  padding: 0 12px;
+}
 
 .ph-task-meta { font-size: 15px; font-weight: 800; letter-spacing: 1px; opacity: .92; text-transform: uppercase; }
 .screen-phrase-task .reveal-text { font-size: 28px; }
@@ -541,6 +550,7 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   font-size: 26px; font-weight: 800; box-shadow: var(--shadow);
 }
 .rate-btn[data-r="5"] { background: #ffd166; }
+.rate-btn.sel { background: var(--navy); color: #fff; transform: scale(1.1); box-shadow: 0 0 0 3px rgba(255,209,102,.8); }
 .rate-btn:active { transform: scale(.92); }
 .done-btn.wide { width: 100%; }
 

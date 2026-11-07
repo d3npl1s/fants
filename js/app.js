@@ -298,8 +298,8 @@
   $('#gamesTrack').addEventListener('click', e => {
     const b = e.target.closest('[data-play]');
     if (!b) return;
-    if (b.dataset.play === 'fants') { showScreen('screen-levels'); syncCarousel(); }
-    else { renderModeChips(); showScreen('screen-phrase-setup'); }
+    if (b.dataset.play === 'fants') { showScreen('screen-levels'); syncCarousel(); openSettings(); }
+    else { renderModeChips(); showScreen('screen-phrase-setup'); openSettings(); }
   });
   $('#backToGames').addEventListener('click', () => showScreen('screen-games'));
   $('#phraseBackBtn').addEventListener('click', () => showScreen('screen-games'));
@@ -685,7 +685,7 @@
   $('#ttsBtn').addEventListener('click', () => speak(state.currentPlain));
 
   /* ══════════ Игра «Продолжи фразу» ══════════ */
-  const PHRASE_H = 96;                      // высота имени в столбике, px
+  const PHRASE_H_DEFAULT = 104;             // высота имени в столбике, px (дублюруется в CSS)
   const phrase = {
     per: store.get('phPer', 5),
     mode: store.get('phMode', 'all'),
@@ -736,7 +736,7 @@
     $('#pairSpinBtn').classList.remove('hidden');
     $('#phraseGoBtn').classList.add('hidden');
     $('#pairCaption').textContent = 'Выберите пару!';
-    $('#phProgress').textContent = 'Пара 1 из ' + state.players.length;
+    $('#phProgress').textContent = 'Пара ' + (state.players.length - phrase.queue.length + 1) + ' из ' + state.players.length;
   }
 
   function drawPair() {
@@ -744,7 +744,7 @@
   }
 
   function spinColumns(reader, answerer) {
-    const n = state.players.length, H = PHRASE_H;
+    const n = state.players.length;
     [['#colReader', reader], ['#colAnswerer', answerer]].forEach(([sel, who], k) => {
       const track = $(sel);
       const rIdx = Math.max(0, state.players.indexOf(who));
@@ -754,15 +754,15 @@
         html += `<div class="pair-item" style="background:${playerColor(i % n)}">${esc(state.players[i % n])}</div>`;
       }
       track.innerHTML = html;
+      // высота строки — из фактического DOM, чтобы JS и CSS не разошлись
+      const H = track.children[0]?.offsetHeight || PHRASE_H_DEFAULT;
       track.style.transition = 'none';
       track.style.transform = 'translateY(0)';
       void track.offsetWidth;
       const target = reps * n + rIdx;      // окно остановится на этом имени
       track.dataset.target = target;
-      requestAnimationFrame(() => {
-        track.style.transition = `transform 1.9s cubic-bezier(.15,.85,.25,1) ${k * .15}s`;
-        track.style.transform = `translateY(-${target * H}px)`;
-      });
+      track.style.transition = `transform 1.9s cubic-bezier(.15,.85,.25,1) ${k * .15}s`;
+      track.style.transform = `translateY(-${target * H}px)`;
     });
   }
 
@@ -830,16 +830,28 @@
   });
 
   $('#ratePanel').addEventListener('click', e => {
-    const b = e.target.closest('[data-r]'); if (!b) return;
-    const who = phrase.current.answerer;
-    const r = parseInt(b.dataset.r, 10);
-    phrase.scores[who].push(r);
-    if (!phStats[who]) phStats[who] = { sum: 0, count: 0 };
-    phStats[who].sum += r; phStats[who].count++;
-    store.set('phStats', phStats);
-    if (!phrase.queue.length) return showPhResults();
-    resetPairScreen();
-    showScreen('screen-phrase-round');
+    // шаг 1: зал выбирает балл — подсвечиваем и ждём подтверждения
+    const b = e.target.closest('[data-r]');
+    if (b) {
+      document.querySelectorAll('.rate-btn').forEach(x => x.classList.toggle('sel', x === b));
+      $('#rateConfirmBtn').classList.remove('hidden');
+      return;
+    }
+    // шаг 2: подтверждение — записываем оценку
+    if (e.target.closest('#rateConfirmBtn')) {
+      const sel = document.querySelector('.rate-btn.sel');
+      const r = parseInt(sel.dataset.r, 10);
+      const who = phrase.current.answerer;
+      phrase.scores[who].push(r);
+      if (!phStats[who]) phStats[who] = { sum: 0, count: 0 };
+      phStats[who].sum += r; phStats[who].count++;
+      store.set('phStats', phStats);
+      document.querySelectorAll('.rate-btn').forEach(x => x.classList.remove('sel'));
+      $('#rateConfirmBtn').classList.add('hidden');
+      if (!phrase.queue.length) return showPhResults();
+      resetPairScreen();
+      showScreen('screen-phrase-round');
+    }
   });
 
   /* ── Статистика средних оценок фразы ── */
