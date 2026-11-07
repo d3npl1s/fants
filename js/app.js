@@ -48,6 +48,7 @@
     spinning: false,
     recent: [],             // последние 2 игрока колеса — чтобы не выпадали подряд
     recentSkel: [],         // последние 4 скелета комбо — анти-залипание (только сессия)
+    recentObj: [],          // последние 3 объекта комбо — «чайка» не упадёт трижды подряд
     currentTask: null,
     currentPlain: ''
   };
@@ -448,16 +449,20 @@
   }
 
   function drawTask(level, type, playerName) {
-    // комбинаторика для действий: объект × совместимый глагол × формат (шанс ~35%)
-    if (type === 'action' && Math.random() < .35) {
+    // комбинаторика для действий: объект × совместимый глагол × формат (шанс ~20%).
+    // Hot не комбинируется: там только авторские задания под тематику уровня
+    if (type === 'action' && level !== 'hot' && Math.random() < .2) {
       for (let a = 0; a < 6; a++) {
         const obj = COMBO.objects[Math.floor(Math.random() * COMBO.objects.length)];
         const v = obj.verbs[Math.floor(Math.random() * obj.verbs.length)];
         const fm = COMBO.formats[Math.floor(Math.random() * COMBO.formats.length)];
         const skel = v + '|' + obj.o;
-        if (state.comboBan.includes(skel) || state.recentSkel.includes(skel)) continue;
+        // один объект не должен выпасть несколько раз подряд (жалоба на тройную чайку)
+        if (state.comboBan.includes(skel) || state.recentSkel.includes(skel) || state.recentObj.includes(obj.o)) continue;
         state.recentSkel.push(skel);
         state.recentSkel = state.recentSkel.slice(-4);
+        state.recentObj.push(obj.o);
+        state.recentObj = state.recentObj.slice(-3);
         // «без слов» — секретная пантомима (крокодил) с таймером на подумать
         const tokens = fm.secret ? ' [[тайно]] [[таймер ' + fm.timer + ']]' : '';
         // tpl: null — комбо не пишутся в chosen/blacklist, их ведут recentSkel + comboBan
@@ -467,8 +472,8 @@
     const bagKey = level + ':' + type;
     if (!state.bags[bagKey] || !state.bags[bagKey].length) {
       let pool = [...DATA.tasks[level][type]];
-      // пакеты: включённые темы подмешиваются в общий мешок
-      DATA.packs.forEach(p => { if (state.packs[p.id]) pool = pool.concat(p[type] || []); });
+      // пакеты: включённые темы подмешиваются в общий мешок (Hot — без пакетов, он тематический)
+      if (level !== 'hot') DATA.packs.forEach(p => { if (state.packs[p.id]) pool = pool.concat(p[type] || []); });
       state.bags[bagKey] = pool.sort(() => Math.random() - .5);
     }
     // чёрный список компании + то, что игрок уже ВЫБИРАЛ, не выпадает; не выбранное — может
@@ -557,7 +562,7 @@
       dur = 1200 + Math.random() * 200;
     }
     const t0 = performance.now();
-    let lastIdx = -1;
+    let lastIdx = -1, lastTickAt = 0;
 
     // setInterval вместо rAF: не замирает в свёрнутых вкладках и webview
     const iv = setInterval(() => frame(performance.now()), 16);
@@ -565,7 +570,11 @@
       const t = Math.min(1, (now - t0) / dur);
       const y = from + ease(t) * dist;
       const idx = Math.floor(total / 2 - y / NAME_H);
-      if (idx !== lastIdx) { lastIdx = idx; tickSound(); }
+      if (idx !== lastIdx) {
+        lastIdx = idx;
+        // троттлинг тиков: новый осциллятор не чаще 25 раз в секунду — меньше джанка на свайпе
+        if (now - lastTickAt > 40) { lastTickAt = now; tickSound(); }
+      }
       track.style.transform = `translate(-50%, calc(-50% + ${y}px))`;
       if (t >= 1) {
         clearInterval(iv);
@@ -757,6 +766,8 @@
       $('#revealText').classList.add('hidden');
       plate.classList.add('hidden');
       tb.classList.add('hidden');
+      $('#hintBtn').classList.add('hidden');
+      $('#hintBox').classList.add('hidden');
       $('#secretBox').classList.remove('hidden');
       $('#secretTitle').innerHTML = '<b>' + esc(pending.name) + '</b>, возьми телефон';
       $('#secretReadBtn').classList.remove('hidden');
