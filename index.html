@@ -11,10 +11,22 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="css/style.css?v=17">
+<link rel="stylesheet" href="css/style.css?v=19">
 </head>
 <body>
 <div id="app" data-level="fun">
+
+  <!-- ══════════ Экран 0: главный ══════════ -->
+  <section class="screen screen-main" id="screen-main">
+    <div class="main-stripes"><i></i><i></i><i></i></div>
+    <div class="main-inner">
+      <svg class="main-crown" viewBox="0 0 120 120"><rect x="30" y="16" width="60" height="60" rx="14" fill="#fff"/><path d="M44 52 40 26l14 10 6-14 6 14 14-10-4 26z" fill="none" stroke="#21265c" stroke-width="4" stroke-linejoin="round"/><path d="M44 52h32v6c0 5-4 9-9 9H53c-5 0-9-4-9-9z" fill="#21265c"/></svg>
+      <h1>Фанты</h1>
+      <p class="main-tag">Пати-игры для компании:<br>правда или действие и продолжи фразу</p>
+      <button class="play-btn big" id="mainStartBtn"><span>Начать</span><i class="chev">›</i></button>
+    </div>
+    <p class="main-ver" id="mainVersion">версия 19 · сделано для своих, некоммерческое</p>
+  </section>
 
   <!-- ══════════ Шапка ══════════ -->
   <header class="topbar">
@@ -114,11 +126,11 @@
       <p class="ph-progress" id="phProgress">Пара 1 из 4</p>
       <div class="pair-cols">
         <div class="pair-col">
-          <span class="pair-role">ЧИТАЕТ</span>
+          <span class="pair-role r-reader">ЧИТАЕТ</span>
           <div class="pair-win"><div class="pair-track" id="colReader"></div></div>
         </div>
         <div class="pair-col">
-          <span class="pair-role">ОТВЕЧАЕТ</span>
+          <span class="pair-role r-answer">ОТВЕЧАЕТ</span>
           <div class="pair-win"><div class="pair-track" id="colAnswerer"></div></div>
         </div>
       </div>
@@ -180,6 +192,7 @@
     <button class="corner-stats" id="statsWheelBtn" aria-label="Статистика">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 20v-7"/><path d="M12 20V4"/><path d="M19 20v-11"/></svg>
     </button>
+    <button class="corner-blitz" id="blitzWheelBtn" aria-label="Блиц-круг">Блиц</button>
     <div class="wheel-hud"><b id="hudRound">Круг 1</b><span class="hud-sep"></span><b id="hudBlitz" class="hidden"></b><span class="hud-sep"></span><span id="hudLeft">в колесе 4 из 4</span></div>
     <button class="spin-big-btn" id="spinBtn" aria-label="Запустить колесо">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -253,10 +266,6 @@
   <div id="settingsModal" class="modal hidden">
     <div class="modal-card">
       <h3>Настройки</h3>
-      <div class="set-row">
-        <span>Уровень</span>
-        <div class="level-chips" id="levelChips"></div>
-      </div>
       <button class="set-row set-btn" id="setPlayersBtn">
         <span>Игроки</span><b id="setPlayersCount">0</b>
       </button>
@@ -266,20 +275,17 @@
       <button class="set-row set-btn" id="setTtsBtn">
         <span>Озвучка заданий</span><b id="setTtsState">Вкл</b>
       </button>
-      <button class="set-row set-btn important" id="setBlitzBtn">
-        <span>Блиц-круг (3 минуты на круг)</span><b id="setBlitzState">Выкл</b>
-      </button>
       <div class="set-row punish-edit important">
         <label for="punishInput">Наказание за провал</label>
         <input id="punishInput" maxlength="60" placeholder="пей стопку">
       </div>
       <button class="set-row set-btn" id="setStatsBtn">
-        <span>Статистика</span>
+        <span>Статистика фантов</span>
       </button>
       <button class="set-row set-btn" id="setGamesBtn">
         <span>К выбору игры</span>
       </button>
-      <p class="set-foot">Домашняя реплика «Фантов» для своих. Некоммерческая</p>
+      <p class="set-foot">Настройки конкретной игры — на её первом экране</p>
       <button class="modal-close" id="settingsCloseBtn">Закрыть</button>
     </div>
   </div>
@@ -308,8 +314,8 @@
   <div id="toast" class="toast hidden"></div>
 </div>
 
-<script src="js/data.js?v=17"></script>
-<script src="js/phrase-data.js?v=17"></script>
-<script src="js/app.js?v=17"></script>
+<script src="js/data.js?v=19"></script>
+<script src="js/phrase-data.js?v=19"></script>
+<script src="js/app.js?v=19"></script>
 </body>
 </html>

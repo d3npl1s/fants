@@ -168,6 +168,8 @@
     $('#hudRound').textContent = 'Круг ' + state.round;
     $('#hudLeft').textContent = 'в колесе ' + state.remaining.length + ' из ' + state.players.length;
     $('#hudBlitz').classList.toggle('hidden', !state.blitz);
+    // блиц теперь включается прямо с экрана колеса
+    $('#blitzWheelBtn').classList.toggle('on', state.blitz);
   }
 
   /* ── Блиц-круг: 3 минуты на весь круг, не успел — наказание ── */
@@ -361,6 +363,13 @@
   /* ══════════ Экран 3: колесо ══════════ */
   $('#backToLevels').addEventListener('click', () => { showScreen('screen-levels'); syncCarousel(); });
   $('#statsWheelBtn').addEventListener('click', () => renderStats('Статистика'));
+  $('#blitzWheelBtn').addEventListener('click', () => {
+    state.blitz = !state.blitz; store.set('blitz', state.blitz);
+    renderHud();
+    if (state.blitz) { startBlitzClock(); toast('Блиц: ' + (BLITZ_SECS / 60) + ' минуты на круг — не успел, ' + state.punish); }
+    else { clearInterval(state.blitzTimerId); toast('Блиц выключен'); }
+  });
+  $('#mainStartBtn').addEventListener('click', () => showScreen('screen-players'));
   $('#spinBtn').addEventListener('click', spin);
 
   // свайп в любом месте экрана запускает колесо — как продолжение жеста (палец или мышь)
@@ -745,6 +754,8 @@
 
   function spinColumns(reader, answerer) {
     const n = state.players.length;
+    // разные подсветки: читающий — золотая, отвечающий — бирюзовая
+    const winCls = ['win-reader', 'win-answer'];
     [['#colReader', reader], ['#colAnswerer', answerer]].forEach(([sel, who], k) => {
       const track = $(sel);
       const rIdx = Math.max(0, state.players.indexOf(who));
@@ -761,6 +772,7 @@
       void track.offsetWidth;
       const target = reps * n + rIdx;      // окно остановится на этом имени
       track.dataset.target = target;
+      track.dataset.wincls = winCls[k];
       track.style.transition = `transform 1.9s cubic-bezier(.15,.85,.25,1) ${k * .15}s`;
       track.style.transform = `translateY(-${target * H}px)`;
     });
@@ -781,7 +793,7 @@
       ['#colReader', '#colAnswerer'].forEach(sel => {
         const tr = $(sel);
         const w = tr.children[tr.dataset.target];
-        if (w) w.classList.add('win');
+        if (w) w.classList.add(tr.dataset.wincls);
       });
       $('#pairCaption').textContent = phrase.current.reader + ' читает — ' + phrase.current.answerer + ' отвечает!';
       $('#phraseGoBtn').classList.remove('hidden');
@@ -799,7 +811,12 @@
 
   function showPhrasePrompt() {
     const tpl = drawPrompt();
-    const r = renderTemplate(tpl, phrase.current.answerer, pickOther(phrase.current.answerer));
+    // отвечающий импровизирует ПРО других: цель — случайный игрок, но не сам отвечающий
+    const others = state.players.filter(p => p !== phrase.current.answerer);
+    const who = others[Math.floor(Math.random() * others.length)];
+    const pool2 = others.filter(p => p !== who);
+    const other = pool2[Math.floor(Math.random() * pool2.length)] || who;
+    const r = renderTemplate(tpl, who, other);
     $('#phTaskMeta').textContent = phrase.current.reader + ' читает · фраза ' + (phrase.qInPair + 1) + ' из ' + phrase.per;
     $('#phTaskText').innerHTML = r.html;
     state.currentPlain = r.plain;
@@ -900,28 +917,15 @@
 
   /* ══════════ Настройки ══════════ */
   function openSettings() {
-    renderChips();
     $('#setPlayersCount').textContent = state.players.length || '—';
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
     $('#setTtsState').textContent = state.tts ? 'Вкл' : 'Выкл';
-    $('#setBlitzState').textContent = state.blitz ? 'Вкл' : 'Выкл';
     $('#punishInput').value = state.punish;
     $('#settingsModal').classList.remove('hidden');
-  }
-  function renderChips() {
-    $('#levelChips').innerHTML = DATA.levels.map(l =>
-      `<button data-lv="${l.id}" class="${l.id === state.level ? 'on' : ''}">${l.name}</button>`).join('');
   }
   $('#menuBtn').addEventListener('click', openSettings);
   $('#settingsCloseBtn').addEventListener('click', () => $('#settingsModal').classList.add('hidden'));
   $('#settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') e.currentTarget.classList.add('hidden'); });
-  $('#levelChips').addEventListener('click', e => {
-    const b = e.target.closest('[data-lv]'); if (!b) return;
-    state.level = b.dataset.lv; store.set('level', state.level);
-    app.dataset.level = state.level;
-    syncCarousel();
-    renderChips();
-  });
   $('#setPlayersBtn').addEventListener('click', () => { $('#settingsModal').classList.add('hidden'); openPlayers('screen-wheel'); });
   $('#setSoundBtn').addEventListener('click', () => {
     state.sound = !state.sound; store.set('sound', state.sound);
@@ -933,12 +937,6 @@
     $('#setTtsState').textContent = state.tts ? 'Вкл' : 'Выкл';
     if (!state.tts) stopSpeak();
     else toast('Диктор озвучит следующее задание');
-  });
-  $('#setBlitzBtn').addEventListener('click', () => {
-    state.blitz = !state.blitz; store.set('blitz', state.blitz);
-    $('#setBlitzState').textContent = state.blitz ? 'Вкл' : 'Выкл';
-    if (state.blitz) { startBlitzClock(); toast('Блиц: ' + (BLITZ_SECS / 60) + ' минуты на круг — не успел, ' + state.punish); }
-    else { clearInterval(state.blitzTimerId); renderHud(); toast('Блиц выключен'); }
   });
   $('#punishInput').addEventListener('input', () => {
     const v = $('#punishInput').value.trim();
@@ -1032,7 +1030,7 @@
   });
   $('#banNo').addEventListener('click', hideBanPopup);
 
-  /* ── Старт: всегда с игроков ── */
+  /* ── Старт: главный экран ── */
   buildCarousel();
   buildGames();
   syncSoundIcons();
@@ -1041,8 +1039,9 @@
   renderPlayers();
   renderHud();
   $('#perValue').textContent = phrase.per;
+  syncPunishInputs();
   if (state.blitz) startBlitzClock();
-  showScreen('screen-players');
+  showScreen('screen-main');
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
