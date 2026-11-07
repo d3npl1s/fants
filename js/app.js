@@ -11,6 +11,9 @@
     '#37474f', '#ad1457', '#4527a0', '#00695c', '#8d6e63', '#b71c1c'
   ];
   const BLITZ_SECS = 180;   // блиц-круг: 3 минуты на круг
+  // локальные токены: комнаты и предметы этого дома
+  const ROOMS = ['кухня', 'балкон', 'душ на втором этаже', 'веранда', 'гостиная'];
+  const OBJECTS = ['плед', 'лопатка для мангала', 'шампур', 'кубик льда', 'одеяло', 'бокал'];
   const MODS = [            // случайные модификаторы к действиям
     'шёпотом', 'с акцентом', 'стоя на одной ноге', 'с каменным лицом',
     'как робот', 'максимально драматично', 'в замедленной съёмке', 'не моргая'
@@ -329,6 +332,28 @@
   $('#phraseBackBtn').addEventListener('click', () => showScreen('screen-games'));
   $('#phraseRoundBackBtn').addEventListener('click', () => { renderModeChips(); showScreen('screen-phrase-setup'); });
 
+  /* ══════════ Пакеты заданий (экран уровней) ══════════ */
+  function buildPacksRow() {
+    const row = $('#packsRow');
+    if (!row) return;
+    let html = `<button type="button" class="pack-chip on base" data-pack="sea">У моря зимой</button>`;
+    html += DATA.packs.map(p => {
+      const on = !!state.packs[p.id];
+      return `<button type="button" class="pack-chip${on ? ' on' : ''}" data-pack="${p.id}">${p.name}</button>`;
+    }).join('');
+    row.innerHTML = html;
+  }
+  $('#packsRow').addEventListener('click', e => {
+    const b = e.target.closest('[data-pack]');
+    if (!b || b.dataset.pack === 'sea') return toast('«У моря зимой» — базовый набор, он всегда с тобой');
+    const id = b.dataset.pack;
+    state.packs[id] = !state.packs[id];
+    store.set('packs', state.packs);
+    state.bags = {};
+    buildPacksRow();
+    toast(state.packs[id] ? 'Пакет «' + (DATA.packs.find(p => p.id === id) || {}).name + '» в игре' : 'Пакет выключен');
+  });
+
   /* ══════════ Экран 2: карусель уровней (нативный свайп) ══════════ */
   const ICONS = {
     cloud: `<svg class="level-icon" viewBox="0 0 120 120"><path fill="#fff" d="M60 14c14 0 26 7 32 18 12 2 21 12 21 25 0 14-11 25-25 25H32C18 82 7 71 7 57c0-12 8-22 19-25 5-11 18-18 34-18z"/><g fill="#3b82d6"><path d="M38 46l12 6-12 6 4-6z"/><path d="M82 46l-12 6 12 6-4-6z"/><path d="M36 68c6 7 13 10 24 10s18-3 24-10c-6 3-14 5-24 5s-18-2-24-5z"/></g></svg>`,
@@ -420,9 +445,25 @@
   }
 
   function drawTask(level, type, playerName) {
+    // комбинаторика для действий: глагол × объект × формат (шанс ~35%)
+    if (type === 'action') {
+      for (let a = 0; a < 4; a++) {
+        const v = COMBO.verbs[Math.floor(Math.random() * COMBO.verbs.length)];
+        const o = COMBO.objects[Math.floor(Math.random() * COMBO.objects.length)];
+        const f = COMBO.formats[Math.floor(Math.random() * COMBO.formats.length)];
+        const skel = v + '|' + o;
+        if (state.recentSkel.includes(skel)) continue;
+        state.recentSkel.push(skel);
+        state.recentSkel = state.recentSkel.slice(-4);
+        return '{name}, ' + v + ' ' + o + ' ' + f + '.';
+      }
+    }
     const bagKey = level + ':' + type;
     if (!state.bags[bagKey] || !state.bags[bagKey].length) {
-      state.bags[bagKey] = [...DATA.tasks[level][type]].sort(() => Math.random() - .5);
+      let pool = [...DATA.tasks[level][type]];
+      // пакеты: включённые темы подмешиваются в общий мешок
+      DATA.packs.forEach(p => { if (state.packs[p.id]) pool = pool.concat(p[type] || []); });
+      state.bags[bagKey] = pool.sort(() => Math.random() - .5);
     }
     // чёрный список компании + то, что игрок уже ВЫБИРАЛ, не выпадает; не выбранное — может
     const chosenBy = (state.chosen[playerName] || {})[type] || [];
@@ -440,7 +481,9 @@
     } else {
       skipped.forEach(t => state.bags[bagKey].unshift(t));
     }
-    return text;
+    // локальные токены фиксируются при вытяжке — превью и задание совпадают
+    return text.replace(/\{room\}/g, () => ROOMS[Math.floor(Math.random() * ROOMS.length)])
+               .replace(/\{object\}/g, () => OBJECTS[Math.floor(Math.random() * OBJECTS.length)]);
   }
 
   function markChosen(name, type, text) {
@@ -807,6 +850,9 @@
   };
   // накопительные средние оценки по игрокам: { имя: { sum, count } }
   let phStats = store.get('phStats', {});
+  // пакеты заданий: включённые темы
+  state.packs = store.get('packs', { kvartirnik: true, dacha: false, ny: false });
+  state.recentSkel = [];
 
   function renderModeChips() {
     $('#modeChips').innerHTML = window.PHRASE.modes.map(m =>
@@ -910,7 +956,9 @@
       const cats = phrase.mode === 'all' ? ['friendly', 'names', 'dark'] : [phrase.mode];
       phrase.bag = cats.flatMap(c => window.PHRASE.prompts[c]).filter(t => !state.blacklist.includes(t)).sort(() => Math.random() - .5);
     }
-    return phrase.bag.pop() || window.PHRASE.prompts.friendly[0];
+    const t = phrase.bag.pop() || window.PHRASE.prompts.friendly[0];
+    return t.replace(/\{room\}/g, () => ROOMS[Math.floor(Math.random() * ROOMS.length)])
+            .replace(/\{object\}/g, () => OBJECTS[Math.floor(Math.random() * OBJECTS.length)]);
   }
 
   function showPhrasePrompt() {
@@ -1148,6 +1196,7 @@
   /* ── Старт: главный экран ── */
   buildCarousel();
   buildGames();
+  buildPacksRow();
   syncSoundIcons();
   syncCarousel(false);
   if (state.players.length < 2) state.players = state.players.concat(['', '']);

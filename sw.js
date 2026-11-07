@@ -1,8 +1,8 @@
 /* Фанты — офлайн-кеш */
-const CACHE = 'fant-v29';
+const CACHE = 'fant-v30';
 const ASSETS = [
   './', './index.html',
-  './css/style.css', './js/data.js', './js/phrase-data.js', './js/app.js',
+  './css/style.css', './js/data.js', './js/combo-data.js', './js/phrase-data.js', './js/app.js',
   './manifest.webmanifest', './icon.svg', './apple-touch-icon.png',
   './fonts/montserrat-500-cyrillic.woff2', './fonts/montserrat-500-latin.woff2',
   './fonts/montserrat-700-cyrillic.woff2', './fonts/montserrat-700-latin.woff2',

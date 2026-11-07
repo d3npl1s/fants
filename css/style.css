@@ -192,6 +192,21 @@ body {
 
 /* ── Карусель уровней ── */
 #screen-levels.active, #screen-games.active { display: flex; flex-direction: column; }
+/* пакеты заданий: чипы под шапкой */
+.packs-row {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 76px); left: 0; right: 0; z-index: 6;
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  padding: 0 14px; pointer-events: none;
+}
+.packs-row .pack-chip {
+  pointer-events: auto; border: 2px solid rgba(255,255,255,.35); border-radius: 20px;
+  background: rgba(33,38,92,.6); color: rgba(255,255,255,.75);
+  font-family: inherit; font-size: 13px; font-weight: 800; padding: 7px 14px; cursor: pointer;
+}
+.packs-row .pack-chip.on {
+  background: var(--white); color: var(--navy); border-color: var(--white);
+}
+.packs-row .pack-chip.base { border-style: dashed; cursor: default; opacity: .8; }
 /* у каждой карточки своя палитра — фон меняется при свайпе */
 .level-card[data-lv="fun"]  { --c1: #56b7e8; --c2: #1c6fc0; --l-accent: #2b7bc9; }
 .level-card[data-lv="soft"] { --c1: #ff5a45; --c2: #ffc53d; --l-accent: #ff7a3d; }
