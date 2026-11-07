@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="css/style.css?v=24">
+<link rel="stylesheet" href="css/style.css?v=25">
 </head>
 <body>
 <div id="app" data-level="fun">
@@ -25,7 +25,7 @@
       <p class="main-tag">Пати-игры для компании:<br>правда или действие и продолжи фразу</p>
       <button class="play-btn big" id="mainStartBtn"><span>Начать</span><i class="chev">›</i></button>
     </div>
-    <p class="main-ver" id="mainVersion">версия 24 · сделано для своих, некоммерческое</p>
+    <p class="main-ver" id="mainVersion">версия 25 · сделано для своих, некоммерческое</p>
   </section>
 
   <!-- ══════════ Шапка ══════════ -->
@@ -233,11 +233,17 @@
     <div class="reveal-inner">
       <h1 class="reveal-type" id="revealType">действие</h1>
       <div class="reveal-divider"></div>
+      <div class="secret-box hidden" id="secretBox">
+        <p class="secret-title" id="secretTitle"></p>
+        <p class="secret-note">Прочитай задание так, чтобы никто не увидел экран</p>
+        <button class="done-btn wide" id="secretReadBtn">Прочитать задание</button>
+      </div>
       <p class="reveal-text" id="revealText"></p>
       <div class="mod-plate hidden" id="modPlate"><span></span></div>
       <button class="task-timer hidden" id="taskTimerBtn"></button>
     </div>
-    <div class="bottom-panel">
+    <div class="bottom-panel hidden" id="taskPanel">
+      <button class="secret-hide hidden" id="secretHideBtn">Скрыть задание от игроков</button>
       <div class="panel-top">
         <p class="punish-note" id="punishNote">Не выполнил — <b>пей стопку</b><br>и остаёшься в колесе</p>
         <button class="panel-btn" id="ttsBtn" aria-label="Прочитать задание голосом">
@@ -317,8 +323,8 @@
   <div id="toast" class="toast hidden"></div>
 </div>
 
-<script src="js/data.js?v=24"></script>
-<script src="js/phrase-data.js?v=24"></script>
-<script src="js/app.js?v=24"></script>
+<script src="js/data.js?v=25"></script>
+<script src="js/phrase-data.js?v=25"></script>
+<script src="js/app.js?v=25"></script>
 </body>
 </html>

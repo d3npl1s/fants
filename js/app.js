@@ -559,10 +559,16 @@
   }
 
   function renderTemplate(tpl, name, other) {
-    // пол игрока: «(а)»-окончания → «а» или пусто; пол не указан — остаётся «(а)»
+    // пол игрока: «(а)»-окончания → «а» или пусто; пол не указан — остаётся «(а)».
+    // формы целиком: «(благодарен|благодарна)» — м-форма или ж-форма
     const g = state.genders[name];
-    if (g === 'f') tpl = tpl.replace(/\((а|ась|ой|на|ся|ись)\)/g, '$1');
-    else if (g === 'm') tpl = tpl.replace(/\((а|ась|ой|на|ся|ись)\)/g, '');
+    if (g === 'f') {
+      tpl = tpl.replace(/\(([^()]+)\|([^()]+)\)/g, '$2');
+      tpl = tpl.replace(/\((а|ась|ся|ись|ла)\)/g, '$1');
+    } else if (g === 'm') {
+      tpl = tpl.replace(/\(([^()]+)\|([^()]+)\)/g, '$1');
+      tpl = tpl.replace(/\((а|ась|ся|ись|ла)\)/g, '');
+    }
     // падежные токены: {other-acc} = кого, {other-dat} = кому, {other-inst} = с кем, {other-gen} = кого/чего
     const v = {
       'name': name, 'other': other,
@@ -602,14 +608,12 @@
     let html = isTruth ? pending.truthHtml : pending.actionHtml;
     let plain = isTruth ? pending.truthPlain : pending.actionPlain;
 
-    // плашка модификатора к действию
-    const mod = !isTruth ? pending.actionMod : null;
-    const plate = $('#modPlate');
-    if (mod) {
-      plate.querySelector('span').textContent = 'Условие: ' + mod;
-      plate.classList.remove('hidden');
-      plain += '. Условие: ' + mod;
-    } else plate.classList.add('hidden');
+    // секретное задание: текст скрыт, отвечающий читает его один ([[тайно]])
+    const secret = /\[\[тайно\]\]/.test(plain);
+    if (secret) {
+      html = html.replace(/\s*\[\[тайно\]\]/g, '');
+      plain = plain.replace(/\s*\[\[тайно\]\]/g, '');
+    }
 
     // таймер задания: явный [[таймер N]] или длительность в тексте («на 15 секунд», «2 минуты»)
     const m = plain.match(/\[\[таймер (\d+)\]\]/);
@@ -631,9 +635,39 @@
       tb.classList.remove('hidden');
     } else tb.classList.add('hidden');
 
+    // плашка модификатора к действию
+    const mod = !isTruth ? pending.actionMod : null;
+    state.currentMod = mod;
+    const plate = $('#modPlate');
+    if (mod) {
+      plate.querySelector('span').textContent = 'Условие: ' + mod;
+      plate.classList.toggle('hidden', secret);
+      if (!secret) plain += '. Условие: ' + mod;
+    } else plate.classList.add('hidden');
+
     $('#revealText').innerHTML = html;
     state.currentPlain = plain;
     $('#punishNote').innerHTML = 'Не выполнил — <b>' + esc(state.punish) + '</b><br>и остаёшься в колесе';
+
+    const panel = $('#taskPanel');
+    if (secret) {
+      // флоу «возьми телефон»: текст появится только по кнопке, озвучка выключена
+      state.secretStage = 'intro';
+      $('#revealText').classList.add('hidden');
+      plate.classList.add('hidden');
+      tb.classList.add('hidden');
+      $('#secretBox').classList.remove('hidden');
+      $('#secretTitle').innerHTML = '<b>' + esc(pending.name) + '</b>, возьми телефон';
+      $('#secretReadBtn').classList.remove('hidden');
+      panel.classList.add('hidden');
+      showScreen('screen-reveal');
+      return;
+    }
+    state.secretStage = null;
+    $('#revealText').classList.remove('hidden');
+    $('#secretBox').classList.add('hidden');
+    $('#secretHideBtn').classList.add('hidden');
+    panel.classList.remove('hidden');
     revealSound(isTruth);
     showScreen('screen-reveal');
     speak(plain);                       // диктор читает задание
@@ -702,6 +736,30 @@
 
   /* ── Повтор озвучки ── */
   $('#ttsBtn').addEventListener('click', () => speak(state.currentPlain));
+
+  /* ── Секретные задания: прочитать → скрыть ── */
+  $('#secretReadBtn').addEventListener('click', () => {
+    state.secretStage = 'read';
+    $('#secretBox').classList.add('hidden');
+    $('#revealText').classList.remove('hidden');
+    const tb = $('#taskTimerBtn');
+    if (tb.dataset.secs) tb.classList.remove('hidden');   // таймер показываем только после прочтения
+    if (state.currentMod) $('#modPlate').classList.remove('hidden');
+    $('#taskPanel').classList.remove('hidden');
+    $('#secretHideBtn').classList.remove('hidden');
+    vibrate(40);
+  });
+  $('#secretHideBtn').addEventListener('click', () => {
+    state.secretStage = 'hidden';
+    $('#revealText').classList.add('hidden');
+    $('#taskTimerBtn').classList.add('hidden');
+    $('#modPlate').classList.add('hidden');
+    $('#secretHideBtn').classList.add('hidden');
+    $('#secretBox').classList.remove('hidden');
+    $('#secretTitle').textContent = 'Выполняй! Затем нажми «Выполнил» или «Не выполнил»';
+    $('#secretReadBtn').classList.add('hidden');
+    vibrate(40);
+  });
 
   /* ══════════ Игра «Продолжи фразу» ══════════ */
   const PHRASE_H_DEFAULT = 104;             // высота имени в столбике, px (дублюруется в CSS)
