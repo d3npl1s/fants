@@ -190,6 +190,7 @@
   }
   function blitzExpire() {
     clearInterval(state.blitzTimerId);
+    state.spinToken = (state.spinToken || 0) + 1;   // отменяем анимацию колеса, если она шла
     // блиц — механика фантов: в других играх просто перезапускаем отсчёт
     const act = document.querySelector('.screen.active')?.id;
     if (act !== 'screen-wheel' && act !== 'screen-reveal' && act !== 'screen-choice') {
@@ -217,7 +218,6 @@
   }
 
   /* ══════════ Экран 1: игроки ══════════ */
-  let setupReturn = 'screen-levels';
   function renderPlayers() {
     const list = $('#playerList');
     list.innerHTML = '';
@@ -230,7 +230,18 @@
       const inp = row.querySelector('input');
       inp.value = name;
       inp.addEventListener('input', () => { state.players[i] = inp.value.trim(); });
-      inp.addEventListener('blur', () => { state.players[i] = inp.value.trim(); store.set('players', state.players); });
+      inp.addEventListener('blur', () => {
+        const old = state.players[i], nv = inp.value.trim();
+        // переименование: переносим пол/статистику/выпавшие задания под новый ключ
+        if (nv && old && nv !== old) {
+          [['genders'], ['chosen'], ['stats'], ['phStats']].forEach(([k]) => {
+            const obj = store.get(k, {});
+            if (obj[old] !== undefined) { obj[nv] = obj[old]; delete obj[old]; store.set(k, obj); }
+          });
+        }
+        state.players[i] = nv;
+        store.set('players', state.players);
+      });
       // пол: — → М → Ж → — (влияет только на грамматику заданий)
       const gx = row.querySelector('.gx');
       const gxLabel = () => {
@@ -252,7 +263,6 @@
     });
   }
   function openPlayers(from) {
-    setupReturn = from;
     if (state.players.length < 2) state.players = state.players.concat(['', '']);
     renderPlayers();
     showScreen('screen-players');
@@ -266,6 +276,7 @@
   $('#setupSaveBtn').addEventListener('click', () => {
     state.players = state.players.map(s => s.trim()).filter(Boolean);
     if (state.players.length < 2) return toast('Нужно минимум 2 игрока');
+    if (new Set(state.players).size !== state.players.length) return toast('Имена не должны повторяться');
     store.set('players', state.players);
     resetRounds();
     showScreen('screen-games');
@@ -288,11 +299,11 @@
         <p class="game-tag">${g.tagline}</p>
         <button class="play-btn" data-play="${g.id}"><span>Играть</span><i class="chev">›</i></button>
       </div>`).join('');
-    $('#gamesDots').innerHTML = GAMES.map((g, i) => `<i data-i="${i}" class="${i === 0 ? 'on' : ''}"></i>`).join('');
+    $('#gamesDots').innerHTML = GAMES.map((g, i) => `<button type="button" class="dot${i === 0 ? ' on' : ''}" data-i="${i}" aria-label="${g.name}"></button>`).join('');
   }
   function syncGames() {
     const i = Math.round($('#gamesCarousel').scrollLeft / Math.max(1, $('#gamesCarousel').clientWidth));
-    document.querySelectorAll('#gamesDots i').forEach((d, k) => d.classList.toggle('on', k === i));
+    document.querySelectorAll('#gamesDots .dot').forEach((d, k) => d.classList.toggle('on', k === i));
   }
   $('#gamesCarousel').addEventListener('scroll', syncGames, { passive: true });
   $('#prevGame').addEventListener('click', () => $('#gamesCarousel').scrollBy({ left: -$('#gamesCarousel').clientWidth, behavior: 'smooth' }));
@@ -323,18 +334,18 @@
         <p class="level-tag">${lv.tagline}</p>
         <button class="play-btn" data-play="${lv.id}"><span>Играть</span><i class="chev">›</i></button>
       </div>`).join('');
-    $('#carDots').innerHTML = DATA.levels.map(l => `<i data-lv="${l.id}"></i>`).join('');
+    $('#carDots').innerHTML = DATA.levels.map(l => `<button type="button" class="dot" data-lv="${l.id}" aria-label="${l.name}"></button>`).join('');
   }
 
   const levelIndex = () => Math.max(0, DATA.levels.findIndex(l => l.id === state.level));
   function syncCarousel(smooth = true) {
     const i = levelIndex();
     carousel.scrollTo({ left: i * carousel.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
-    document.querySelectorAll('#carDots i').forEach(d => d.classList.toggle('on', d.dataset.lv === DATA.levels[i].id));
+    document.querySelectorAll('#carDots .dot').forEach(d => d.classList.toggle('on', d.dataset.lv === DATA.levels[i].id));
   }
   carousel.addEventListener('scroll', () => {                         // точки следуют за свайпом
     const i = Math.round(carousel.scrollLeft / Math.max(1, carousel.clientWidth));
-    document.querySelectorAll('#carDots i').forEach((d, k) => d.classList.toggle('on', k === i));
+    document.querySelectorAll('#carDots .dot').forEach((d, k) => d.classList.toggle('on', k === i));
   }, { passive: true });
   $('#carDots').addEventListener('click', e => {
     const d = e.target.closest('[data-lv]'); if (!d) return;
@@ -430,6 +441,8 @@
   function spin(opts = {}) {
     if (state.spinning || state.players.length < 2) return;
     state.spinning = true;
+    state.spinToken = (state.spinToken || 0) + 1;   // блиц может сбросить круг прямо во время анимации
+    const token = state.spinToken;
     vibrate(30);
 
     // экран колеса плавно уезжает — имена подъезжают следом
@@ -493,12 +506,18 @@
       track.style.transform = `translate(-50%, calc(-50% + ${y}px))`;
       if (t >= 1) {
         clearInterval(iv);
-        finishSpin(endIdx, rem[chosenIdx]);
+        finishSpin(endIdx, rem[chosenIdx], token);
       }
     }
   }
 
-  function finishSpin(winIdx, winnerName) {
+  function finishSpin(winIdx, winnerName, token) {
+    if (token !== state.spinToken) {         // круг сброшен блицем во время анимации
+      $('#spinOverlay').classList.add('hidden');
+      $('#screen-wheel').classList.remove('leaving');
+      state.spinning = false;
+      return;
+    }
     // запоминаем двух последних, чтобы один игрок не выпадал много раз подряд
     state.recent.push(winnerName);
     state.recent = state.recent.slice(-2);
@@ -605,41 +624,39 @@
   }
 
   /* ══════════ Экран 5: задание ══════════ */
+  // таймер из текста: цифры, слова («одну минуту») и «10-секундный»
+  function detectTimerSecs(raw) {
+    const m = raw.match(/\[\[таймер (\d+)\]\]/);
+    if (m) return parseInt(m[1], 10);
+    const a = raw.match(/(\d+)\s*[-—]?\s*(секунд\S*|сек\b|минут\S*|мин\b)/);
+    if (a) return /мин/.test(a[2]) ? parseInt(a[1], 10) * 60 : parseInt(a[1], 10);
+    const w = raw.match(/(одну|две|три|четыре|пять)\s+(минут\S*|мин\b)/);
+    if (w) return ({ одну: 1, две: 2, три: 3, четыре: 4, пять: 5 })[w[1]] * 60;
+    return 0;
+  }
+
   function reveal(type) {
-    state.currentTask = pending[type];
+    const raw = pending[type];          // сырой шаблон: все служебные токены на месте
+    state.currentTask = raw;
     const isTruth = type === 'truth';
     $('#revealType').textContent = isTruth ? 'правда' : 'действие';
-    let html = isTruth ? pending.truthHtml : pending.actionHtml;
-    let plain = isTruth ? pending.truthPlain : pending.actionPlain;
 
     // секретное задание: текст скрыт, отвечающий читает его один ([[тайно]])
-    const secret = /\[\[тайно\]\]/.test(plain);
-    if (secret) {
-      html = html.replace(/\s*\[\[тайно\]\]/g, '');
-      plain = plain.replace(/\s*\[\[тайно\]\]/g, '');
-    }
-    html = html.replace(/\s*\[\[мод:[^\]]+\]\]/g, '');
-    plain = plain.replace(/\s*\[\[мод:[^\]]+\]\]/g, '');
+    const secret = /\[\[тайно\]\]/.test(raw);
 
-    // таймер задания: явный [[таймер N]] или длительность в тексте («на 15 секунд», «2 минуты»)
-    const m = plain.match(/\[\[таймер (\d+)\]\]/);
-    let secs = 0;
-    if (m) {
-      secs = parseInt(m[1], 10);
-      html = html.replace(/\s*\[\[таймер \d+\]\]/g, '');
-      plain = plain.replace(/\s*\[\[таймер \d+\]\]/g, '');
-    } else {
-      const a = plain.match(/(\d+)\s*(секунд\S*|сек\b|минут\S*|мин\b)/);
-      if (a) secs = /мин/.test(a[2]) ? parseInt(a[1], 10) * 60 : parseInt(a[1], 10);
-    }
+    // таймер задания: явный [[таймер N]] или длительность в тексте
+    const secs = Math.min(600, detectTimerSecs(raw));
     clearInterval(state.taskTimerId);
     const tb = $('#taskTimerBtn');
     tb.classList.remove('running', 'finished');
-    if (secs > 0 && secs <= 600) {
+    if (secs > 0) {
       tb.dataset.secs = secs;
       tb.textContent = 'Запустить таймер (' + fmtTime(secs) + ')';
       tb.classList.remove('hidden');
-    } else tb.classList.add('hidden');
+    } else {
+      tb.dataset.secs = '';
+      tb.classList.add('hidden');
+    }
 
     // плашка модификатора к действию
     const mod = !isTruth ? pending.actionMod : null;
@@ -648,17 +665,19 @@
     if (mod) {
       plate.querySelector('span').textContent = 'Условие: ' + mod;
       plate.classList.toggle('hidden', secret);
-      if (!secret) plain += '. Условие: ' + mod;
     } else plate.classList.add('hidden');
 
-    $('#revealText').innerHTML = html;
+    // рендер уже вычищает все служебные токены
+    const r = renderTemplate(raw, pending.name, pickOther(pending.name));
+    let plain = r.plain;
+    if (mod && !secret) plain = plain.replace(/\.?\s*$/, '') + '. Условие: ' + mod;
+    $('#revealText').innerHTML = r.html;
     state.currentPlain = plain;
     $('#punishNote').innerHTML = 'Не выполнил — <b>' + esc(state.punish) + '</b><br>и остаёшься в колесе';
 
     const panel = $('#taskPanel');
     if (secret) {
       // флоу «возьми телефон»: текст появится только по кнопке, озвучка выключена
-      state.secretStage = 'intro';
       $('#revealText').classList.add('hidden');
       plate.classList.add('hidden');
       tb.classList.add('hidden');
@@ -669,7 +688,6 @@
       showScreen('screen-reveal');
       return;
     }
-    state.secretStage = null;
     $('#revealText').classList.remove('hidden');
     $('#secretBox').classList.add('hidden');
     $('#secretHideBtn').classList.add('hidden');
@@ -745,7 +763,6 @@
 
   /* ── Секретные задания: прочитать → скрыть ── */
   $('#secretReadBtn').addEventListener('click', () => {
-    state.secretStage = 'read';
     $('#secretBox').classList.add('hidden');
     $('#revealText').classList.remove('hidden');
     const tb = $('#taskTimerBtn');
@@ -756,7 +773,6 @@
     vibrate(40);
   });
   $('#secretHideBtn').addEventListener('click', () => {
-    state.secretStage = 'hidden';
     $('#revealText').classList.add('hidden');
     $('#taskTimerBtn').classList.add('hidden');
     $('#modPlate').classList.add('hidden');
@@ -1117,7 +1133,7 @@
   if (state.blitz) startBlitzClock();
   showScreen('screen-main');
 
-  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 })();

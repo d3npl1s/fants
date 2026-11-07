@@ -228,11 +228,11 @@ body {
 }
 .dot-arrow:active { transform: scale(.9); }
 .dots { display: flex; justify-content: center; gap: 10px; }
-.dots i {
-  width: 10px; height: 10px; border-radius: 50%;
-  border: 1.5px solid rgba(255,255,255,.9); transition: background .25s;
+.dots .dot {
+  width: 10px; height: 10px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1.5px solid rgba(255,255,255,.9); background: transparent; transition: background .25s;
 }
-.dots i.on { background: #fff; }
+.dots .dot.on { background: #fff; }
 
 /* ── Колесо ── */
 .screen-wheel { overflow: hidden; touch-action: none; transition: transform .4s cubic-bezier(.4, 0, .2, 1), opacity .4s; }
