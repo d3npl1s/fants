@@ -692,11 +692,14 @@
     bag: [], queue: [], picks: 0, qInPair: 0,
     scores: {}, current: null
   };
+  // накопительные средние оценки по игрокам: { имя: { sum, count } }
+  let phStats = store.get('phStats', {});
 
   function renderModeChips() {
     $('#modeChips').innerHTML = window.PHRASE.modes.map(m =>
       `<button data-mode="${m.id}" class="${m.id === phrase.mode ? 'on' : ''}">${m.name}</button>`).join('');
     $('#modeTag').textContent = (window.PHRASE.modes.find(m => m.id === phrase.mode) || {}).tagline || '';
+    syncPunishInputs();
   }
   $('#modeChips').addEventListener('click', e => {
     const b = e.target.closest('[data-mode]'); if (!b) return;
@@ -755,6 +758,7 @@
       track.style.transform = 'translateY(0)';
       void track.offsetWidth;
       const target = reps * n + rIdx;      // окно остановится на этом имени
+      track.dataset.target = target;
       requestAnimationFrame(() => {
         track.style.transition = `transform 1.9s cubic-bezier(.15,.85,.25,1) ${k * .15}s`;
         track.style.transform = `translateY(-${target * H}px)`;
@@ -773,6 +777,12 @@
     $('#phraseGoBtn').classList.add('hidden');
     $('#pairCaption').textContent = '...';
     setTimeout(() => {
+      // подсветка выпавшей пары — чтобы финал был виден и в середине анимации
+      ['#colReader', '#colAnswerer'].forEach(sel => {
+        const tr = $(sel);
+        const w = tr.children[tr.dataset.target];
+        if (w) w.classList.add('win');
+      });
       $('#pairCaption').textContent = phrase.current.reader + ' читает — ' + phrase.current.answerer + ' отвечает!';
       $('#phraseGoBtn').classList.remove('hidden');
       vibrate(40);
@@ -795,7 +805,9 @@
     state.currentPlain = r.plain;
     // последняя фраза пары — на оценку зала
     const last = phrase.qInPair + 1 >= phrase.per;
-    $('#phraseNextBtn').textContent = last ? 'Оценить пару' : 'Следующая фраза ›';
+    const btn = $('#phraseNextBtn');
+    btn.classList.remove('hidden');                    // после оценки пары кнопка возвращается
+    btn.textContent = last ? 'Оценить пару' : 'Следующая фраза ›';
     $('#ratePanel').classList.add('hidden');
     showScreen('screen-phrase-task');
   }
@@ -820,11 +832,45 @@
   $('#ratePanel').addEventListener('click', e => {
     const b = e.target.closest('[data-r]'); if (!b) return;
     const who = phrase.current.answerer;
-    phrase.scores[who].push(parseInt(b.dataset.r, 10));
+    const r = parseInt(b.dataset.r, 10);
+    phrase.scores[who].push(r);
+    if (!phStats[who]) phStats[who] = { sum: 0, count: 0 };
+    phStats[who].sum += r; phStats[who].count++;
+    store.set('phStats', phStats);
     if (!phrase.queue.length) return showPhResults();
     resetPairScreen();
     showScreen('screen-phrase-round');
   });
+
+  /* ── Статистика средних оценок фразы ── */
+  function renderPhStats() {
+    const rows = state.players
+      .map(nm => ({ nm, ...(phStats[nm] || { sum: 0, count: 0 }) }))
+      .map(r => ({ ...r, avg: r.count ? r.sum / r.count : 0 }))
+      .sort((a, b) => b.avg - a.avg || b.count - a.count);
+    const best = rows.find(r => r.count);
+    $('#statsTitle').textContent = 'Средние оценки';
+    $('#statsTable').innerHTML = rows.map(r =>
+      `<div class="stats-row"><b>${esc(r.nm)}</b><span>${r.count ? 'средняя: ' + (Math.round(r.avg * 10) / 10) + ' из 5 · оценок: ' + r.count : 'пока без оценок'}</span></div>`
+    ).join('') + (best ? `<p class="stats-kings">Самый уверенный: ${esc(best.nm)}</p>` : '');
+    $('#statsModal').classList.remove('hidden');
+  }
+  $('#phraseStatsBtn').addEventListener('click', renderPhStats);
+  $('#phraseStatsBtn2').addEventListener('click', renderPhStats);
+
+  /* ── Наказание: инпут в настройках фразы синхронен глобальному ── */
+  const syncPunishInputs = () => {
+    const pi = $('#punishInput'), pp = $('#phrasePunishInput');
+    if (pi) pi.value = state.punish;
+    if (pp) pp.value = state.punish;
+  };
+  $('#phrasePunishInput').addEventListener('input', () => {
+    const v = $('#phrasePunishInput').value.trim();
+    state.punish = v || 'пей стопку';
+    store.set('punish', state.punish);
+    const pi = $('#punishInput'); if (pi) pi.value = state.punish;
+  });
+  $('#phrasePunishInput').addEventListener('blur', syncPunishInputs);
 
   function showPhResults() {
     const rows = state.players.map(nm => {

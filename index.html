@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="css/style.css?v=14">
+<link rel="stylesheet" href="css/style.css?v=15">
 </head>
 <body>
 <div id="app" data-level="fun">
@@ -92,8 +92,9 @@
 
       <div class="ph-field">
         <label>Наказание за последнее место</label>
-        <p class="ph-punish" id="phrasePunish">пей стопку</p>
+        <input id="phrasePunishInput" class="ph-punish-input" maxlength="60" placeholder="пей стопку">
       </div>
+      <button class="ghost-btn" id="phraseStatsBtn2">Статистика средних оценок</button>
 
       <div class="setup-actions">
         <button class="play-btn big" id="phraseStartBtn"><span>Начать</span><i class="chev">›</i></button>
@@ -105,6 +106,9 @@
   <section class="screen screen-phrase-round" id="screen-phrase-round">
     <button class="corner-back" id="phraseRoundBackBtn" aria-label="К настройкам">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <button class="corner-stats" id="phraseStatsBtn" aria-label="Средние оценки">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 20v-7"/><path d="M12 20V4"/><path d="M19 20v-11"/></svg>
     </button>
     <div class="phrase-round-inner">
       <p class="ph-progress" id="phProgress">Пара 1 из 4</p>
@@ -118,10 +122,10 @@
           <div class="pair-win"><div class="pair-track" id="colAnswerer"></div></div>
         </div>
       </div>
+      <p class="wheel-caption" id="pairCaption">Выберите пару!</p>
       <button class="spin-big-btn small" id="pairSpinBtn" aria-label="Выбрать пару">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
       </button>
-      <p class="wheel-caption" id="pairCaption">Выберите пару!</p>
       <button class="done-btn hidden" id="phraseGoBtn">Фраза! ›</button>
     </div>
   </section>
@@ -303,8 +307,8 @@
   <div id="toast" class="toast hidden"></div>
 </div>
 
-<script src="js/data.js?v=14"></script>
-<script src="js/phrase-data.js?v=14"></script>
-<script src="js/app.js?v=14"></script>
+<script src="js/data.js?v=15"></script>
+<script src="js/phrase-data.js?v=15"></script>
+<script src="js/app.js?v=15"></script>
 </body>
 </html>
