@@ -41,6 +41,7 @@
     bags: {},             // мешки заданий без повторов
     taskTimerId: null,
     spinning: false,
+    recent: [],             // последние 2 игрока колеса — чтобы не выпадали подряд
     currentTask: null,
     currentPlain: ''
   };
@@ -187,6 +188,12 @@
   }
   function blitzExpire() {
     clearInterval(state.blitzTimerId);
+    // блиц — механика фантов: в других играх просто перезапускаем отсчёт
+    const act = document.querySelector('.screen.active')?.id;
+    if (act !== 'screen-wheel' && act !== 'screen-reveal' && act !== 'screen-choice') {
+      startBlitzClock();
+      return;
+    }
     stopSpeak();
     const laggards = state.remaining.slice();
     laggards.forEach(nm => {
@@ -423,7 +430,10 @@
 
     const rem = state.remaining.length ? state.remaining : [...state.players];
     const n = rem.length;
-    const chosenIdx = Math.floor(Math.random() * n);
+    // дубовый анти-повтор: не даём последним двум игрокам выпасть снова
+    let pool = rem.map((_, i) => i).filter(i => !state.recent.includes(rem[i]));
+    if (!pool.length) pool = rem.map((_, i) => i);
+    const chosenIdx = pool[Math.floor(Math.random() * pool.length)];
     const pad = SPIN_PAD;
     const dir = opts.dir || 1;                                   // 1 — лента вверх, -1 — вниз
     const loops = opts.swipe ? 2 + Math.floor(Math.random() * 2) : 1;  // свайп — 2–3 оборота, тап — один короткий
@@ -464,19 +474,25 @@
     const t0 = performance.now();
     let lastIdx = -1;
 
+    // setInterval вместо rAF: не замирает в свёрнутых вкладках и webview
+    const iv = setInterval(() => frame(performance.now()), 16);
     function frame(now) {
       const t = Math.min(1, (now - t0) / dur);
       const y = from + ease(t) * dist;
       const idx = Math.floor(total / 2 - y / NAME_H);
       if (idx !== lastIdx) { lastIdx = idx; tickSound(); }
       track.style.transform = `translate(-50%, calc(-50% + ${y}px))`;
-      if (t < 1) requestAnimationFrame(frame);
-      else finishSpin(endIdx, rem[chosenIdx]);
+      if (t >= 1) {
+        clearInterval(iv);
+        finishSpin(endIdx, rem[chosenIdx]);
+      }
     }
-    requestAnimationFrame(frame);
   }
 
   function finishSpin(winIdx, winnerName) {
+    // запоминаем двух последних, чтобы один игрок не выпадал много раз подряд
+    state.recent.push(winnerName);
+    state.recent = state.recent.slice(-2);
     const winner = document.querySelector(`.spin-name[data-i="${winIdx}"]`);
     if (winner) winner.classList.add('win');
     vibrate([60, 60, 140]);
@@ -673,7 +689,7 @@
   const phrase = {
     per: store.get('phPer', 5),
     mode: store.get('phMode', 'all'),
-    bag: [], usedPairs: [], queue: [], asked: 0,
+    bag: [], queue: [], picks: 0, qInPair: 0,
     scores: {}, current: null
   };
 
@@ -692,15 +708,20 @@
 
   function phraseStart() {
     if (state.players.length < 2) { toast('Нужно минимум 2 игрока'); return; }
-    phrase.bag = []; phrase.usedPairs = []; phrase.asked = 0;
+    phrase.bag = []; phrase.picks = 0; phrase.qInPair = 0;
     phrase.scores = {};
     state.players.forEach(nm => phrase.scores[nm] = []);
-    // очередь ответов: каждый игрок отвечает per раз, порядок случайный
-    phrase.queue = state.players.flatMap(nm => Array(phrase.per).fill(nm)).sort(() => Math.random() - .5);
-    $('#pairCaption').textContent = 'Выберите пару!';
-    $('#pairSpinBtn').classList.remove('hidden');
-    $('#phraseGoBtn').classList.add('hidden');
-    renderProgress();
+    // пары круга: случайная перестановка без самих себя — каждый по разу читает и отвечает
+    const ans = [...state.players].sort(() => Math.random() - .5);
+    const rds = [...state.players].sort(() => Math.random() - .5);
+    for (let i = 0; i < ans.length; i++) {
+      if (rds[i] === ans[i]) {
+        const j = (i + 1) % ans.length;
+        [rds[i], rds[j]] = [rds[j], rds[i]];
+      }
+    }
+    phrase.queue = ans.map((a, i) => ({ reader: rds[i], answerer: a }));
+    resetPairScreen();
     showScreen('screen-phrase-round');
   }
   $('#phraseStartBtn').addEventListener('click', phraseStart);
@@ -708,22 +729,15 @@
   $('#phraseSettingsBtn').addEventListener('click', () => { renderModeChips(); showScreen('screen-phrase-setup'); });
   $('#phraseGamesBtn').addEventListener('click', () => showScreen('screen-games'));
 
-  function renderProgress() {
-    $('#phProgress').textContent = 'Вопрос ' + (phrase.asked + 1) + ' из ' + (state.players.length * phrase.per);
+  function resetPairScreen() {
+    $('#pairSpinBtn').classList.remove('hidden');
+    $('#phraseGoBtn').classList.add('hidden');
+    $('#pairCaption').textContent = 'Выберите пару!';
+    $('#phProgress').textContent = 'Пара 1 из ' + state.players.length;
   }
 
   function drawPair() {
-    const answerer = phrase.queue.shift();
-    const others = state.players.filter(p => p !== answerer);
-    const free = others.filter(o => !phrase.usedPairs.includes(o + '→' + answerer));
-    let reader;
-    if (free.length) reader = free[Math.floor(Math.random() * free.length)];
-    else {   // все пары с этим отвечающим были — по кругу
-      phrase.usedPairs = phrase.usedPairs.filter(p => !p.endsWith('→' + answerer));
-      reader = others[Math.floor(Math.random() * others.length)];
-    }
-    phrase.usedPairs.push(reader + '→' + answerer);
-    return { reader, answerer };
+    return phrase.queue.shift();
   }
 
   function spinColumns(reader, answerer) {
@@ -750,7 +764,10 @@
 
   $('#pairSpinBtn').addEventListener('click', () => {
     if (!phrase.queue.length) return showPhResults();
-    phrase.current = drawPair();
+    phrase.current = drawPair();                 // отвечающий берётся из очереди круга
+    phrase.qInPair = 0;
+    phrase.picks = state.players.length - phrase.queue.length;
+    $('#phProgress').textContent = 'Пара ' + phrase.picks + ' из ' + state.players.length;
     spinColumns(phrase.current.reader, phrase.current.answerer);
     $('#pairSpinBtn').classList.add('hidden');
     $('#phraseGoBtn').classList.add('hidden');
@@ -770,30 +787,42 @@
     return phrase.bag.pop() || window.PHRASE.prompts.friendly[0];
   }
 
-  $('#phraseGoBtn').addEventListener('click', () => {
-    if (!phrase.current) return;
+  function showPhrasePrompt() {
     const tpl = drawPrompt();
     const r = renderTemplate(tpl, phrase.current.answerer, pickOther(phrase.current.answerer));
-    $('#phTaskMeta').textContent = phrase.current.answerer + ' отвечает · вопрос ' + (phrase.asked + 1) + ' из ' + (state.players.length * phrase.per);
+    $('#phTaskMeta').textContent = phrase.current.reader + ' читает · фраза ' + (phrase.qInPair + 1) + ' из ' + phrase.per;
     $('#phTaskText').innerHTML = r.html;
     state.currentPlain = r.plain;
-    $('#phraseRateBtn').classList.remove('hidden');
+    // последняя фраза пары — на оценку зала
+    const last = phrase.qInPair + 1 >= phrase.per;
+    $('#phraseNextBtn').textContent = last ? 'Оценить пару' : 'Следующая фраза ›';
     $('#ratePanel').classList.add('hidden');
     showScreen('screen-phrase-task');
-    speak(r.plain);
+  }
+
+  $('#phraseGoBtn').addEventListener('click', () => {
+    if (!phrase.current) return;
+    showPhrasePrompt();
   });
 
-  $('#phraseRateBtn').addEventListener('click', () => $('#ratePanel').classList.remove('hidden'));
+  $('#phraseNextBtn').addEventListener('click', () => {
+    if (!phrase.current) return;
+    if (phrase.qInPair + 1 < phrase.per) {
+      phrase.qInPair++;
+      showPhrasePrompt();
+      return;
+    }
+    // пара отработала все фразы — зал ставит оценку
+    $('#phraseNextBtn').classList.add('hidden');
+    $('#ratePanel').classList.remove('hidden');
+  });
+
   $('#ratePanel').addEventListener('click', e => {
     const b = e.target.closest('[data-r]'); if (!b) return;
     const who = phrase.current.answerer;
     phrase.scores[who].push(parseInt(b.dataset.r, 10));
-    phrase.asked++;
     if (!phrase.queue.length) return showPhResults();
-    $('#pairCaption').textContent = 'Выберите пару!';
-    $('#pairSpinBtn').classList.remove('hidden');
-    $('#phraseGoBtn').classList.add('hidden');
-    renderProgress();
+    resetPairScreen();
     showScreen('screen-phrase-round');
   });
 

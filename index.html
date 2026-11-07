@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<script>window.addEventListener('error',function(e){try{localStorage.setItem('dbg',e.message+' @ '+(e.filename||'')+':'+e.lineno)}catch(_){}});</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#21265c">
 <title>Фанты — правда или действие</title>
@@ -10,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=14">
 </head>
 <body>
 <div id="app" data-level="fun">
@@ -106,7 +107,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
     </button>
     <div class="phrase-round-inner">
-      <p class="ph-progress" id="phProgress">Вопрос 1 из 20</p>
+      <p class="ph-progress" id="phProgress">Пара 1 из 4</p>
       <div class="pair-cols">
         <div class="pair-col">
           <span class="pair-role">ЧИТАЕТ</span>
@@ -133,9 +134,9 @@
       <p class="reveal-text" id="phTaskText"></p>
     </div>
     <div class="bottom-panel">
-      <button class="done-btn wide" id="phraseRateBtn">Оценить ответ</button>
+      <button class="done-btn wide" id="phraseNextBtn">Следующая фраза ›</button>
       <div class="rate-panel hidden" id="ratePanel">
-        <p class="rate-hint">Оценка общего зала — насколько уверенно?</p>
+        <p class="rate-hint">Оценка общего зала — за пару целиком</p>
         <div class="rate-row">
           <button class="rate-btn" data-r="1">1</button>
           <button class="rate-btn" data-r="2">2</button>
@@ -302,8 +303,8 @@
   <div id="toast" class="toast hidden"></div>
 </div>
 
-<script src="js/data.js"></script>
-<script src="js/phrase-data.js"></script>
-<script src="js/app.js"></script>
+<script src="js/data.js?v=14"></script>
+<script src="js/phrase-data.js?v=14"></script>
+<script src="js/app.js?v=14"></script>
 </body>
 </html>
