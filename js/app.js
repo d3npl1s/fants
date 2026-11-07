@@ -228,17 +228,19 @@
         <button class="gx" title="Пол — для окончаний в заданиях"></button>
         <button class="rm" title="Удалить">×</button>`;
       const inp = row.querySelector('input');
+      const original = name;                 // имя на момент рендера строки — база для миграции
       inp.value = name;
       inp.addEventListener('input', () => { state.players[i] = inp.value.trim(); });
       inp.addEventListener('blur', () => {
-        const old = state.players[i], nv = inp.value.trim();
+        const nv = inp.value.trim();
+        state.players[i] = nv;               // сначала актуальное имя — renderPlayers ниже покажет его
         // переименование: переносим пол/статистику/выпавшие задания под новый ключ
-        if (nv && old && nv !== old) {
+        if (nv && original && nv !== original) {
           [['genders'], ['chosen'], ['stats'], ['phStats']].forEach(([k]) => {
             const obj = store.get(k, {});
-            if (obj[old] !== undefined) {
-              if (obj[nv] === undefined) obj[nv] = obj[old];   // не затираем чужие данные
-              delete obj[old];
+            if (obj[original] !== undefined) {
+              if (obj[nv] === undefined) obj[nv] = obj[original];   // не затираем чужие данные
+              delete obj[original];
               store.set(k, obj);
             }
           });
@@ -249,7 +251,6 @@
           phStats = store.get('phStats', {});
           renderPlayers();
         }
-        state.players[i] = nv;
         store.set('players', state.players);
       });
       // пол: — → М → Ж → — (влияет только на грамматику заданий)
@@ -272,7 +273,7 @@
       list.appendChild(row);
     });
   }
-  function openPlayers(from) {
+  function openPlayers() {
     if (state.players.length < 2) state.players = state.players.concat(['', '']);
     renderPlayers();
     showScreen('screen-players');
@@ -373,7 +374,7 @@
   });
 
   function tryStartGame(levelId) {
-    if (state.players.length < 2) { toast('Сначала добавьте игроков'); openPlayers('screen-levels'); return; }
+    if (state.players.length < 2) { toast('Сначала добавьте игроков'); openPlayers(); return; }
     state.level = levelId;
     store.set('level', levelId);
     app.dataset.level = levelId;
@@ -571,8 +572,6 @@
     pending.otherAction = pickOther(name);
     const t = renderTemplate(pending.truth, name, pending.otherTruth);
     const a = renderTemplate(pending.action, name, pending.otherAction);
-    pending.truthHtml = t.html; pending.truthPlain = t.plain;
-    pending.actionHtml = a.html; pending.actionPlain = a.plain;
     $('#truthPreview').innerHTML = t.html;
     $('#actionPreview').innerHTML = a.html;
 
@@ -1022,7 +1021,7 @@
   $('#menuBtn').addEventListener('click', openSettings);
   $('#settingsCloseBtn').addEventListener('click', () => $('#settingsModal').classList.add('hidden'));
   $('#settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') e.currentTarget.classList.add('hidden'); });
-  $('#setPlayersBtn').addEventListener('click', () => { $('#settingsModal').classList.add('hidden'); openPlayers('screen-wheel'); });
+  $('#setPlayersBtn').addEventListener('click', () => { $('#settingsModal').classList.add('hidden'); openPlayers(); });
   $('#setSoundBtn').addEventListener('click', () => {
     state.sound = !state.sound; store.set('sound', state.sound);
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
@@ -1139,7 +1138,6 @@
       const otherKey = type === 'truth' ? 'otherTruth' : 'otherAction';
       pending[otherKey] = pickOther(pending.name);
       const r = renderTemplate(pending[type], pending.name, pending[otherKey]);
-      pending[type + 'Html'] = r.html; pending[type + 'Plain'] = r.plain;
       $(type === 'truth' ? '#truthPreview' : '#actionPreview').innerHTML = r.html;
       toast('Задание убрано из игры');
     }
