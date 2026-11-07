@@ -351,6 +351,14 @@ body {
 .reveal-divider { width: 150px; height: 5px; background: #fff; border-radius: 3px; box-shadow: 0 3px 8px rgba(0,0,0,.2); }
 .reveal-text { font-size: 24px; font-weight: 700; line-height: 1.55; max-width: 560px; text-shadow: 0 2px 6px rgba(0,0,0,.2); }
 .reveal-text b { color: var(--navy); font-weight: 800; }
+/* плашка модификатора — заметное усложнение к действию */
+.mod-plate {
+  background: #ffd166; color: var(--navy);
+  font-size: 18px; font-weight: 800; line-height: 1.35;
+  padding: 12px 22px; border-radius: 12px;
+  transform: skewX(-10deg); box-shadow: var(--shadow);
+}
+.mod-plate span { display: inline-block; transform: skewX(10deg); }
 .task-timer {
   border: 2px solid rgba(255,255,255,.7); background: rgba(24, 27, 66, .5); color: #fff;
   font-family: inherit; font-size: 16px; font-weight: 800; padding: 12px 24px;

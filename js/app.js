@@ -520,16 +520,17 @@
   let pending = null;   // { name, truth, action }
 
   function openChoice(name) {
-    let aTask = drawTask(state.level, 'action', name);
-    // случайный модификатор к действию (не для заданий со своим таймером)
-    if (!/\[\[таймер/.test(aTask) && Math.random() < .3) {
-      const mod = MODS[Math.floor(Math.random() * MODS.length)];
-      aTask = aTask.replace(/\.?$/, '') + ' — и всё это ' + mod + '.';
+    const aTask = drawTask(state.level, 'action', name);
+    // случайный модификатор к действию (не для заданий со своим таймером), шанс 50%
+    let actionMod = null;
+    if (!/\[\[таймер/.test(aTask) && Math.random() < .5) {
+      actionMod = MODS[Math.floor(Math.random() * MODS.length)];
     }
     pending = {
       name,
       truth: drawTask(state.level, 'truth', name),
-      action: aTask
+      action: aTask,
+      actionMod
     };
     $('#choiceName').textContent = name;
     // текст и «случайный друг» фиксируются один раз: превью = то, что получишь после выбора
@@ -600,6 +601,15 @@
     $('#revealType').textContent = isTruth ? 'правда' : 'действие';
     let html = isTruth ? pending.truthHtml : pending.actionHtml;
     let plain = isTruth ? pending.truthPlain : pending.actionPlain;
+
+    // плашка модификатора к действию
+    const mod = !isTruth ? pending.actionMod : null;
+    const plate = $('#modPlate');
+    if (mod) {
+      plate.querySelector('span').textContent = 'Условие: ' + mod;
+      plate.classList.remove('hidden');
+      plain += '. Условие: ' + mod;
+    } else plate.classList.add('hidden');
 
     // таймер задания: явный [[таймер N]] или длительность в тексте («на 15 секунд», «2 минуты»)
     const m = plain.match(/\[\[таймер (\d+)\]\]/);
