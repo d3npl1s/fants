@@ -179,9 +179,12 @@
   function tickBlitz() {
     if (!state.blitz) return;
     const now = Date.now();
-    // «Продолжи фразу» — другая игра: блиц на паузе, дедлайн сдвигается на время каждого тика
+    // BLITZ-1: часы идут только на игровых экранах без открытых модалок/попапов.
+    // В меню, настройках и на экране игроков — пауза (дедлайн сдвигается на время каждого тика)
     const act = document.querySelector('.screen.active')?.id || '';
-    if (act.startsWith('screen-phrase')) {
+    const onGame = act === 'screen-wheel' || act === 'screen-choice' || act === 'screen-reveal';
+    const overlayed = document.querySelector('.modal:not(.hidden)') || !$('#banPopup').classList.contains('hidden');
+    if (!onGame || overlayed) {
       state.blitzEndsAt += now - (state.blitzLastTick || now);
       state.blitzLastTick = now;
       return;
@@ -194,6 +197,8 @@
   }
   function blitzExpire() {
     clearInterval(state.blitzTimerId);
+    stopTaskTimer();                      // TIMER-1
+    hideBanPopup();                       // BLITZ-1: banOpen не должен навсегда блокировать choose()
     state.spinToken = (state.spinToken || 0) + 1;   // отменяем анимацию колеса, если она шла
     // блиц — механика фантов: в других играх просто перезапускаем отсчёт
     const act = document.querySelector('.screen.active')?.id;
@@ -559,9 +564,14 @@
 
     const rem = state.remaining.length ? state.remaining : [...state.players];
     const n = rem.length;
-    // дубовый анти-повтор: не даём последним двум игрокам выпасть снова
-    let pool = rem.map((_, i) => i).filter(i => !state.recent.includes(rem[i]));
-    if (!pool.length) pool = rem.map((_, i) => i);
+    // анти-повтор (WHEEL-1): исключаем только ПОСЛЕДНЕГО выпавшего и только при ≥3 игроках —
+    // иначе при трёх оставшихся результат предопределён, а при четырёх шансы 50/50
+    const lastWinner = state.recent[state.recent.length - 1];
+    let pool = rem.map((_, i) => i);
+    if (rem.length >= 3 && lastWinner !== undefined) {
+      const noRepeat = pool.filter(i => rem[i] !== lastWinner);
+      if (noRepeat.length) pool = noRepeat;
+    }
     const chosenIdx = pool[Math.floor(Math.random() * pool.length)];
     const pad = SPIN_PAD;
     const dir = opts.dir || 1;                                   // 1 — лента вверх, -1 — вниз
@@ -810,6 +820,7 @@
   function completeTask(done) {
     if (!pending) return;                 // двойной быстрый тап не должен писать статистику дважды
     stopSpeak();
+    stopTaskTimer();                      // TIMER-1
     const name = pending.name;
     pending = null;                       // ход завершён — защищаем от повторного вызова
     if (!state.stats[name]) state.stats[name] = newStats();
@@ -847,6 +858,13 @@
   $('#btnFail').addEventListener('click', () => completeTask(false));
 
   /* ── Внутренний таймер задания ── */
+  // TIMER-1: таймер обязан глохнуть при любом завершении хода — beep не сработает на экране колеса
+  function stopTaskTimer() {
+    clearInterval(state.taskTimerId);
+    state.taskTimerId = null;
+    const tb = $('#taskTimerBtn');
+    tb.classList.remove('running', 'finished');
+  }
   $('#taskTimerBtn').addEventListener('click', () => {
     const b = $('#taskTimerBtn');
     if (b.classList.contains('running')) return;
