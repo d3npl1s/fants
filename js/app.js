@@ -1197,17 +1197,31 @@
   }
 
   /* ══════════ Настройки ══════════ */
+  /* доступность модалок: фокус входит внутрь и не покидает их (Tab по кругу),
+     при закрытии возвращается на открывшую кнопку */
+  let modalOpener = null;
+  function openModal(sel) {
+    modalOpener = document.activeElement;
+    $(sel).classList.remove('hidden');
+    const f = $(sel).querySelector('button:not(.hidden), input');
+    if (f) f.focus();
+  }
+  function closeModal(sel) {
+    $(sel).classList.add('hidden');
+    if (modalOpener && modalOpener.focus) modalOpener.focus();
+    modalOpener = null;
+  }
   function openSettings() {
     $('#setPlayersCount').textContent = state.players.length || '—';
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
     $('#setTtsState').textContent = state.tts ? 'Вкл' : 'Выкл';
     $('#punishInput').value = state.punish;
-    $('#settingsModal').classList.remove('hidden');
+    openModal('#settingsModal');
   }
   $('#menuBtn').addEventListener('click', openSettings);
-  $('#settingsCloseBtn').addEventListener('click', () => $('#settingsModal').classList.add('hidden'));
-  $('#settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') e.currentTarget.classList.add('hidden'); });
-  $('#setPlayersBtn').addEventListener('click', () => { $('#settingsModal').classList.add('hidden'); openPlayers(); });
+  $('#settingsCloseBtn').addEventListener('click', () => closeModal('#settingsModal'));
+  $('#settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') closeModal('#settingsModal'); });
+  $('#setPlayersBtn').addEventListener('click', () => { closeModal('#settingsModal'); openPlayers(); });
   $('#setSoundBtn').addEventListener('click', () => {
     state.sound = !state.sound; store.set('sound', state.sound);
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
@@ -1228,11 +1242,11 @@
     $('#punishInput').value = state.punish;
   });
   $('#setStatsBtn').addEventListener('click', () => {
-    $('#settingsModal').classList.add('hidden');
+    closeModal('#settingsModal');
     renderStats('Статистика');
   });
   $('#setGamesBtn').addEventListener('click', () => {
-    $('#settingsModal').classList.add('hidden');
+    closeModal('#settingsModal');
     showScreen('screen-games');
   });
 
@@ -1266,10 +1280,10 @@
         `<div class="stats-row"><b>${esc(r.nm)}</b><span>правда: ${r.truth} · действие: ${r.action} · сделано: ${r.done}</span><span>${esc(state.punish)}: ${r.fails}</span></div>`
       ).join('') + (top && top.done ? `<p class="stats-kings">Король мангала: ${esc(top.nm)} — ${top.done}</p>` : '');
     }
-    $('#statsModal').classList.remove('hidden');
+    openModal('#statsModal');
   }
-  $('#statsCloseBtn').addEventListener('click', () => $('#statsModal').classList.add('hidden'));
-  $('#statsModal').addEventListener('click', e => { if (e.target.id === 'statsModal') e.currentTarget.classList.add('hidden'); });
+  $('#statsCloseBtn').addEventListener('click', () => closeModal('#statsModal'));
+  $('#statsModal').addEventListener('click', e => { if (e.target.id === 'statsModal') closeModal('#statsModal'); });
   $('#statsResetBtn').addEventListener('click', () => {
     const kind = $('#statsModal').dataset.kind || 'fants';
     if (kind === 'phrase') {
@@ -1358,16 +1372,31 @@
   if (state.blitz) startBlitzClock();
   showScreen('screen-main');
 
-  // Escape закрывает модалки и всплывашку бана
+  // Escape закрывает модалки/всплывашку бана, Tab ходит по кругу внутри модалки
   addEventListener('keydown', e => {
-    if (e.key !== 'Escape') return;
-    ['#settingsModal', '#statsModal', '#banPopup'].forEach(s => $(s).classList.add('hidden'));
-    banOpen = false;
+    const modal = document.querySelector('.modal:not(.hidden)');
+    if (e.key === 'Escape') {
+      if (modal) closeModal('#' + modal.id);
+      else if (!$('#banPopup').classList.contains('hidden')) { hideBanPopup(); banOpen = false; }
+      return;
+    }
+    if (e.key !== 'Tab' || !modal) return;
+    const f = [...modal.querySelectorAll('button:not(.hidden), input')]
+      .filter(el => el.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    else if (!modal.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
   });
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('sw.js')
-      .then(reg => reg.addEventListener('updatefound', () => toast('Вышла новая версия — обновите страницу')))
+      .then(reg => {
+        reg.addEventListener('updatefound', () => toast('Вышла новая версия — обновите страницу'));
+        // давно открытая вкладка сама узнаёт об обновлении — раз в час
+        setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+      })
       .catch(() => {});
   }
 })();

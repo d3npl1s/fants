@@ -231,8 +231,14 @@ body {
 }
 .level-icon { width: 130px; height: 130px; filter: drop-shadow(0 8px 14px rgba(0,0,0,.2)); }
 .level-name { font-size: 54px; font-weight: 800; text-shadow: 0 5px 0 rgba(0,0,0,.18); letter-spacing: 1px; }
-/* фикс. высота под 3 строки: кнопка «Играть» на всех уровнях на одной высоте */
-.level-tag { font-size: 19px; font-weight: 700; line-height: 1.5; max-width: 320px; min-height: 86px; display: flex; align-items: center; justify-content: center; text-shadow: 0 2px 8px rgba(0,0,0,.5); }
+/* фикс. высота под 3 строки: кнопка «Играть» на всех уровнях на одной высоте;
+   тёмная подложка — формальный WCAG-контраст без опоры на тень */
+.level-tag {
+  font-size: 19px; font-weight: 700; line-height: 1.5; max-width: 320px; min-height: 86px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 10px 16px; border-radius: 14px; background: rgba(24, 27, 66, .5);
+  text-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
 .level-card .play-btn { max-width: 320px; margin-top: 10px; }
 
 .dots-row {
@@ -313,6 +319,11 @@ body {
   position: absolute; top: 66%; left: 0; right: 0; text-align: center;
   font-size: 28px; font-weight: 800; text-shadow: 0 2px 10px rgba(0,0,0,.55);
   z-index: 3;
+}
+/* тёмная подложка — формальный WCAG-контраст без опоры на тень */
+.wheel-caption span {
+  display: inline-block; padding: 8px 22px; border-radius: 24px;
+  background: rgba(24, 27, 66, .55);
 }
 
 /* ── Выбор правда/действие ── */
@@ -761,8 +772,9 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   .reveal-type { font-size: 36px; }
   .reveal-text { font-size: 18px; }
 }
-/* уважение к системной настройке «меньше движения» */
+/* уважение к системной настройке «меньше движения»
+   (специфичность: .ps1–.ps3 — два класса, гасим каждый явно) */
 @media (prefers-reduced-motion: reduce) {
-  .spin-stripe { animation: none; }
+  .spin-stripe.ps1, .spin-stripe.ps2, .spin-stripe.ps3 { animation: none; }
   .main-stripes i, .stripe { transition: none; }
 }
