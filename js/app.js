@@ -233,25 +233,36 @@
     state.players.forEach((name, i) => {
       const row = document.createElement('div');
       row.className = 'player-row';
-      row.innerHTML = `<input maxlength="14" placeholder="Имя ${i + 1}" style="border-left:6px solid ${playerColor(i)}">
-        <button class="gx" title="Пол — для окончаний в заданиях"></button>
-        <button class="rm" title="Удалить">×</button>`;
+      row.innerHTML = `<input maxlength="14" placeholder="Имя ${i + 1}" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="next" style="border-left:6px solid ${playerColor(i)}">
+        <button class="gx" title="Пол — для окончаний в заданиях" aria-label="Пол игрока ${esc(name) || i + 1}: не указан"></button>
+        <button class="rm" title="Удалить" aria-label="Удалить игрока ${esc(name) || i + 1}">×</button>`;
       const inp = row.querySelector('input');
       const original = name;                 // имя на момент рендера строки — база для миграции
       inp.value = name;
       inp.addEventListener('input', () => { state.players[i] = inp.value.trim(); });
+      // PLAYERS-3: Enter — следующее поле, в последнем — новый игрок (до 12)
+      inp.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (state.players.length < 12 && i === state.players.length - 1) {
+          $('#addPlayerBtn').click();
+        } else {
+          const inputs = document.querySelectorAll('#playerList input');
+          inputs[Math.min(i + 1, inputs.length - 1)]?.focus();
+        }
+      });
       inp.addEventListener('blur', () => {
         let nv = inp.value.trim();
-        // дубль имени (среди игроков или в хранилищах) — откат, данные другого игрока не трогаем
-        const dup = nv && nv !== original && (
-          state.players.filter(p => p === nv).length > 1 ||
-          ['genders', 'chosen', 'stats', 'phStats'].some(k => store.get(k, {})[nv] !== undefined)
-        );
+        // PLAYERS-1: дубль — только среди ТЕКУЩИХ игроков, без регистра и лишних пробелов.
+        // Данные удалённого игрока остаются в хранилищах: повторное добавление имени —
+        // намеренный «возврат» статистики, а не запрещённый дубль
+        const dup = nv && nv.toLowerCase() !== original.toLowerCase() &&
+          state.players.some((p, k) => k !== i && p.trim().toLowerCase() === nv.toLowerCase());
         if (dup) {
-          nv = original;
           state.players[i] = original;
           inp.value = original;
-          toast('Имя «' + nv + '» уже есть — оставил «' + original + '»');
+          toast('Имя «' + nv + '» уже есть — оставил «' + original + '»');   // PLAYERS-1.2: в тосте введённое имя
+          nv = original;
         } else {
           state.players[i] = nv;             // сначала актуальное имя — renderPlayers ниже покажет его
         }
@@ -289,6 +300,8 @@
       const gxLabel = () => {
         const cur = state.genders[state.players[i]] || '';
         gx.textContent = cur === 'm' ? 'М' : cur === 'f' ? 'Ж' : '—';
+        gx.setAttribute('aria-label', 'Пол игрока ' + (state.players[i] || i + 1) + ': ' +
+          (cur === 'm' ? 'М' : cur === 'f' ? 'Ж' : 'не указан'));
       };
       gxLabel();
       gx.addEventListener('click', () => {
@@ -312,7 +325,11 @@
       list.appendChild(row);
     });
   }
-  function openPlayers() {
+  // PLAYERS-2: состав на момент открытия экрана — сброс круга только при реальном изменении
+  let playersReturn = null, rosterAtOpen = '';
+  function openPlayers(from) {
+    playersReturn = from || null;
+    rosterAtOpen = state.players.filter(Boolean).join('|');
     if (state.players.length < 2) state.players = state.players.concat(['', '']);
     renderPlayers();
     showScreen('screen-players');
@@ -326,10 +343,13 @@
   $('#setupSaveBtn').addEventListener('click', () => {
     state.players = state.players.map(s => s.trim()).filter(Boolean);
     if (state.players.length < 2) return toast('Нужно минимум 2 игрока');
-    if (new Set(state.players).size !== state.players.length) return toast('Имена не должны повторяться');
+    if (new Set(state.players.map(s => s.toLowerCase())).size !== state.players.length) return toast('Имена не должны повторяться');
     store.set('players', state.players);
-    resetRounds();
-    showScreen('screen-games');
+    // PLAYERS-2: круг сбрасывается только при изменении состава (добавили/убрали),
+    // простое переименование игру не ломает
+    if (state.players.join('|') !== rosterAtOpen) resetRounds();
+    if (playersReturn) { const back = playersReturn; playersReturn = null; showScreen(back); }
+    else showScreen('screen-games');
   });
 
   /* ══════════ Экран 2: выбор игры ══════════ */
@@ -453,7 +473,7 @@
     if (state.blitz) { startBlitzClock(); toast('Блиц: ' + (BLITZ_SECS / 60) + ' минуты на круг — не успел, ' + state.punish); }
     else { clearInterval(state.blitzTimerId); toast('Блиц выключен'); }
   });
-  $('#mainStartBtn').addEventListener('click', () => showScreen('screen-players'));
+  $('#mainStartBtn').addEventListener('click', () => openPlayers());
   $('#spinBtn').addEventListener('click', spin);
 
   // свайп в любом месте экрана запускает колесо — как продолжение жеста (палец или мышь)
@@ -1182,7 +1202,7 @@
     modalOpener = null;
   }
   function openSettings() {
-    $('#setPlayersCount').textContent = state.players.length || '—';
+    $('#setPlayersCount').textContent = state.players.filter(Boolean).length || '—';   // SET-1: без пустых полей
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
     $('#setTtsState').textContent = state.tts ? 'Вкл' : 'Выкл';
     $('#punishInput').value = state.punish;
@@ -1191,7 +1211,12 @@
   $('#menuBtn').addEventListener('click', openSettings);
   $('#settingsCloseBtn').addEventListener('click', () => closeModal('#settingsModal'));
   $('#settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') closeModal('#settingsModal'); });
-  $('#setPlayersBtn').addEventListener('click', () => { closeModal('#settingsModal'); openPlayers(); });
+  $('#setPlayersBtn').addEventListener('click', () => {
+    // PLAYERS-2: запоминаем экран, с которого открыли игроков, — «Дальше» вернёт туда
+    const from = document.querySelector('.screen.active')?.id || null;
+    closeModal('#settingsModal');
+    openPlayers(from);
+  });
   $('#setSoundBtn').addEventListener('click', () => {
     state.sound = !state.sound; store.set('sound', state.sound);
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
