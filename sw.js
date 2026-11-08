@@ -1,5 +1,8 @@
 /* Фанты — офлайн-кеш */
-const CACHE = 'fant-v1.3.1';
+const VERSION = '1.3.1';   // должна совпадать с ?v= в index.html и текстом версии
+const CACHE = 'fant-v' + VERSION;
+// предзакеш идёт с тем же ?v=, что и запросы из index.html:
+// caches.match сравнивает URL вместе с query — без версии ассет не найдётся
 const ASSETS = [
   './', './index.html',
   './css/style.css', './js/data.js', './js/combo-data.js', './js/phrase-data.js', './js/app.js',
@@ -7,7 +10,7 @@ const ASSETS = [
   './fonts/montserrat-500-cyrillic.woff2', './fonts/montserrat-500-latin.woff2',
   './fonts/montserrat-700-cyrillic.woff2', './fonts/montserrat-700-latin.woff2',
   './fonts/montserrat-800-cyrillic.woff2', './fonts/montserrat-800-latin.woff2'
-];
+].map(u => (u.endsWith('/') || u.endsWith('.html') ? u : u + '?v=' + VERSION));
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
