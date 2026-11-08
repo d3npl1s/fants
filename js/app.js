@@ -120,6 +120,14 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const playerColor = i => PLAYER_COLORS[i % PLAYER_COLORS.length];
   const fmtTime = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  // Фишер–Йетс: sort(() => Math.random() - .5) даёт смещённую тасовку
+  const shuffle = arr => {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
 
   /* ── Склонение имён: acc (кого), dat (кому), inst (с кем), gen (кого/чего) ── */
   function decline(raw, cs) {
@@ -185,12 +193,22 @@
     clearInterval(state.blitzTimerId);
     if (!state.blitz) { $('#hudBlitz').classList.add('hidden'); return; }
     state.blitzEndsAt = Date.now() + BLITZ_SECS * 1000;
+    state.blitzLastTick = Date.now();
     state.blitzTimerId = setInterval(tickBlitz, 500);
     tickBlitz();
   }
   function tickBlitz() {
     if (!state.blitz) return;
-    const left = Math.max(0, Math.round((state.blitzEndsAt - Date.now()) / 1000));
+    const now = Date.now();
+    // «Продолжи фразу» — другая игра: блиц на паузе, дедлайн сдвигается на время каждого тика
+    const act = document.querySelector('.screen.active')?.id || '';
+    if (act.startsWith('screen-phrase')) {
+      state.blitzEndsAt += now - (state.blitzLastTick || now);
+      state.blitzLastTick = now;
+      return;
+    }
+    state.blitzLastTick = now;
+    const left = Math.max(0, Math.round((state.blitzEndsAt - now) / 1000));
     const hb = $('#hudBlitz');
     hb.textContent = 'блиц ' + fmtTime(left);
     if (left <= 0) blitzExpire();
@@ -256,6 +274,16 @@
           state.chosen = store.get('chosen', {});
           state.stats = store.get('stats', {});
           phStats = store.get('phStats', {});
+          // текущий круг: переименовываем игрока в remaining, иначе колесо выберет «призрака»
+          if (state.remaining.includes(original)) {
+            state.remaining = state.remaining.map(p => (p === original ? nv : p));
+            store.set('remaining', state.remaining);
+            renderHud();
+          }
+          if (state.streaks[original] !== undefined) {   // лимит «2 раза подряд» следует за именем
+            state.streaks[nv] = state.streaks[original];
+            delete state.streaks[original];
+          }
           renderPlayers();
         }
         store.set('players', state.players);
@@ -275,7 +303,15 @@
         gxLabel();
       });
       row.querySelector('.rm').addEventListener('click', () => {
-        state.players.splice(i, 1); store.set('players', state.players); renderPlayers();
+        const gone = state.players[i];
+        state.players.splice(i, 1); store.set('players', state.players);
+        // удалённый не должен остаться в текущем круге — иначе колесо выберет его имя
+        if (gone && state.remaining.includes(gone)) {
+          state.remaining = state.remaining.filter(p => p !== gone);
+          store.set('remaining', state.remaining);
+        }
+        delete state.streaks[gone];
+        renderPlayers(); renderHud();
       });
       list.appendChild(row);
     });
@@ -474,7 +510,7 @@
       let pool = [...DATA.tasks[level][type]];
       // пакеты: включённые темы подмешиваются в общий мешок (Hot — без пакетов, он тематический)
       if (level !== 'hot') DATA.packs.forEach(p => { if (state.packs[p.id]) pool = pool.concat(p[type] || []); });
-      state.bags[bagKey] = pool.sort(() => Math.random() - .5);
+      state.bags[bagKey] = shuffle(pool);
     }
     // чёрный список компании + то, что игрок уже ВЫБИРАЛ, не выпадает; не выбранное — может
     const chosenBy = (state.chosen[playerName] || {})[type] || [];
@@ -486,9 +522,15 @@
       text = t; break;
     }
     if (text === null) {                    // игрок уже прошёл всё — разрешаем повторы
-      state.bags[bagKey] = skipped.filter(t => !state.blacklist.includes(t));
-      const pool = state.bags[bagKey].length ? state.bags[bagKey] : DATA.tasks[level][type].filter(t => !state.blacklist.includes(t));
-      text = pool[Math.floor(Math.random() * pool.length)] || DATA.tasks[level][type][0];
+      // пересобираем мешок с нуля: база + включённые пакеты, без чёрного списка и уже выбранного
+      let pool = [...DATA.tasks[level][type]];
+      if (level !== 'hot') DATA.packs.forEach(p => { if (state.packs[p.id]) pool = pool.concat(p[type] || []); });
+      pool = pool.filter(t => !state.blacklist.includes(t) && !chosenBy.includes(t));
+      // совсем нечего (всё забанено/выбрано) — тогда повторяем из всей базы уровня
+      // (копия! ссылку в мешок давать нельзя — pop() выкачает DATA насквозь)
+      if (!pool.length) pool = [...DATA.tasks[level][type]];
+      state.bags[bagKey] = shuffle(pool);
+      text = pool[Math.floor(Math.random() * pool.length)];
     } else {
       skipped.forEach(t => state.bags[bagKey].unshift(t));
     }
@@ -689,6 +731,8 @@
 
   function choose(type) {
     if (!pending || banOpen) return;   // клик после зажатия не выбирает
+    const card = $(type === 'truth' ? '#choiceTruth' : '#choiceAction');
+    if (card.classList.contains('locked')) return;   // залоченный вариант не выбирается (но бан по зажатию доступен)
     const st = state.streaks[pending.name];
     if (st && st.type === type) st.count += 1;
     else state.streaks[pending.name] = { type, count: 1 };
@@ -913,8 +957,8 @@
     phrase.scores = {};
     state.players.forEach(nm => phrase.scores[nm] = []);
     // пары круга: случайная перестановка без самих себя — каждый по разу читает и отвечает
-    const ans = [...state.players].sort(() => Math.random() - .5);
-    const rds = [...state.players].sort(() => Math.random() - .5);
+    const ans = shuffle([...state.players]);
+    const rds = shuffle([...state.players]);
     for (let i = 0; i < ans.length; i++) {
       if (rds[i] === ans[i]) {
         const j = (i + 1) % ans.length;
@@ -993,7 +1037,7 @@
   function drawPrompt() {
     if (!phrase.bag.length) {
       const cats = phrase.mode === 'all' ? ['friendly', 'names', 'dark'] : [phrase.mode];
-      phrase.bag = cats.flatMap(c => window.PHRASE.prompts[c]).filter(t => !state.blacklist.includes(t)).sort(() => Math.random() - .5);
+      phrase.bag = shuffle(cats.flatMap(c => window.PHRASE.prompts[c]).filter(t => !state.blacklist.includes(t)));
     }
     const t = phrase.bag.pop() || window.PHRASE.prompts.friendly[0];
     return t.replace(/\{room\}/g, () => ROOMS[Math.floor(Math.random() * ROOMS.length)])

@@ -337,7 +337,8 @@ body {
 .choice-card.truth  { background: var(--navy); }
 .choice-card.action { background: #c81468; }
 .choice-card:active { transform: scale(.97); }
-.choice-card.locked { opacity: .45; pointer-events: none; filter: grayscale(.6); }
+/* залоченная карточка: выбор блокирует JS (choose), но долгое нажатие для бана должно работать */
+.choice-card.locked { opacity: .45; filter: grayscale(.6); }
 .cc-type {
   align-self: flex-start; font-size: 22px; font-weight: 800; text-transform: lowercase; letter-spacing: 1px;
   background: rgba(255,255,255,.18); padding: 4px 16px; border-radius: 20px;
