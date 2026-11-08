@@ -168,7 +168,7 @@ body {
   background: rgba(255,255,255,.95); outline: none; box-shadow: var(--shadow);
   min-width: 0;
 }
-.player-row input::placeholder { color: #9aa2c9; font-weight: 500; }
+.player-row input::placeholder { color: #5f6795; font-weight: 500; }
 .player-row .rm {
   flex: 0 0 62px; height: 62px; border: none; border-radius: 14px;
   background: rgba(33,38,92,.88); color: #fff; font-size: 34px; line-height: 1;
@@ -232,7 +232,7 @@ body {
 .level-icon { width: 130px; height: 130px; filter: drop-shadow(0 8px 14px rgba(0,0,0,.2)); }
 .level-name { font-size: 54px; font-weight: 800; text-shadow: 0 5px 0 rgba(0,0,0,.18); letter-spacing: 1px; }
 /* фикс. высота под 3 строки: кнопка «Играть» на всех уровнях на одной высоте */
-.level-tag { font-size: 19px; font-weight: 700; line-height: 1.5; max-width: 320px; min-height: 86px; display: flex; align-items: center; justify-content: center; text-shadow: 0 2px 6px rgba(0,0,0,.18); }
+.level-tag { font-size: 19px; font-weight: 700; line-height: 1.5; max-width: 320px; min-height: 86px; display: flex; align-items: center; justify-content: center; text-shadow: 0 2px 8px rgba(0,0,0,.5); }
 .level-card .play-btn { max-width: 320px; margin-top: 10px; }
 
 .dots-row {
@@ -281,8 +281,8 @@ body {
 .corner-stats:active { transform: scale(.92); }
 .corner-blitz {
   position: absolute; top: calc(env(safe-area-inset-top, 0px) + 144px); left: 16px;
-  width: 52px; height: 52px; border: 2px solid rgba(255,255,255,.3); border-radius: 14px; cursor: pointer;
-  background: rgba(33,38,92,.7); color: rgba(255,255,255,.55); z-index: 6;
+  width: 52px; height: 52px; border: 2px solid rgba(255,255,255,.5); border-radius: 14px; cursor: pointer;
+  background: rgba(33,38,92,.7); color: rgba(255,255,255,.85); z-index: 6;
   box-shadow: var(--shadow); display: grid; place-items: center;
   font-family: inherit; font-size: 14px; font-weight: 800;
 }
@@ -311,7 +311,7 @@ body {
 .spin-big-btn:active { transform: translate(-50%, -50%) scale(.94); }
 .wheel-caption {
   position: absolute; top: 66%; left: 0; right: 0; text-align: center;
-  font-size: 28px; font-weight: 800; text-shadow: 0 3px 8px rgba(0,0,0,.3);
+  font-size: 28px; font-weight: 800; text-shadow: 0 2px 10px rgba(0,0,0,.55);
   z-index: 3;
 }
 
@@ -588,10 +588,10 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   font-size: 15px; font-weight: 800; letter-spacing: 3px;
   background: rgba(33,38,92,.75); border-radius: 20px; padding: 6px 16px;
 }
-.pair-role.r-reader { background: #b8971f; }
-.pair-role.r-answer { background: #1d9c80; }
+.pair-role.r-reader { background: #8a6f14; }
+.pair-role.r-answer { background: #0f6f5a; }
 .pair-win {
-  width: 158px; height: 104px; border-radius: 18px; overflow: hidden; position: relative;
+  width: min(158px, calc(50vw - 24px)); height: 104px; border-radius: 18px; overflow: hidden; position: relative;
   background: var(--navy); box-shadow: var(--shadow);
   border: 3px solid rgba(255,255,255,.3);
 }
@@ -599,7 +599,10 @@ button.set-btn b { opacity: .85; font-weight: 800; }
 .pair-item { height: 104px; flex: 0 0 104px; display: grid; place-items: center; font-size: 27px; font-weight: 800; color: #fff; text-align: center; padding: 0 10px; white-space: nowrap; }
 .pair-item.win-reader, .pair-item.win-reader span { background: #ffd166 !important; color: var(--navy) !important; }
 .pair-item.win-answer, .pair-item.win-answer span { background: #35d0aa !important; color: var(--navy) !important; }
-#pairSpinBtn { width: 128px; height: 128px; }
+/* кнопка пары — обычный ребёнок кластера: position/transform колеса тут не нужны,
+   иначе кнопка уезжает поверх подписи и за нижний край экрана */
+#pairSpinBtn { width: 128px; height: 128px; position: static; transform: none; }
+#pairSpinBtn:active { transform: scale(.94); }
 #pairSpinBtn svg { width: 58px; height: 58px; }
 #phraseGoBtn {
   position: static; transform: none; margin-top: 0;
@@ -730,4 +733,36 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   .reveal-text { font-size: 28px; }
   .choice-cards { flex-direction: row; }
   .choice-card { flex: 1; }
+}
+/* ландшафт / низкие экраны: всё компактнее — кнопки не уезжают за край и не
+   перекрываются подписями (ревью 2, п.1.2–1.4) */
+@media (max-height: 480px) {
+  .main-crown { width: 80px; height: 80px; }
+  .main-inner { gap: 10px; }
+  .main-inner h1 { font-size: 40px; }
+  .main-tag { font-size: 15px; margin-bottom: 8px; }
+  .main-ver { display: none; }                       /* не перехватывает клик по «Начать» */
+  .play-btn { height: 54px; }
+  .play-btn span { font-size: 18px; }
+  .game-card { padding: calc(env(safe-area-inset-top, 0px) + 56px) 24px 70px; gap: 8px; }
+  .game-icon { width: 64px; height: 64px; }
+  .game-name { font-size: 26px; min-height: 0; }
+  .game-tag { font-size: 14px; min-height: 0; }
+  .level-card { padding: calc(env(safe-area-inset-top, 0px) + 56px) 24px 70px; gap: 10px; }
+  .level-icon { width: 72px; height: 72px; }
+  .level-name { font-size: 34px; }
+  .level-tag { font-size: 15px; min-height: 0; }
+  .choice-inner { padding-top: calc(env(safe-area-inset-top, 0px) + 46px); gap: 8px; }
+  .choice-name { font-size: 34px; padding: 4px 24px; }
+  .choice-card { padding: 12px 16px; gap: 6px; }
+  .cc-type { font-size: 16px; }
+  .cc-text { font-size: 15px; }
+  .reveal-inner { bottom: 132px; padding-top: calc(env(safe-area-inset-top, 0px) + 40px); gap: 12px; }
+  .reveal-type { font-size: 36px; }
+  .reveal-text { font-size: 18px; }
+}
+/* уважение к системной настройке «меньше движения» */
+@media (prefers-reduced-motion: reduce) {
+  .spin-stripe { animation: none; }
+  .main-stripes i, .stripe { transition: none; }
 }

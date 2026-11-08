@@ -21,8 +21,19 @@
 
   /* ── Хранилище ── */
   const store = {
-    get(k, d) { try { const v = localStorage.getItem('fant.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
-    set(k, v) { try { localStorage.setItem('fant.' + k, JSON.stringify(v)); } catch {} }
+    // тип значения сверяется с дефолтом: битый ключ (строка вместо массива и т.п.)
+    // отдаёт дефолт, а не роняет весь IIFE белым экраном
+    get(k, d) {
+      try {
+        const v = localStorage.getItem('fant.' + k);
+        if (v === null) return d;
+        const p = JSON.parse(v);
+        if (Array.isArray(d) !== Array.isArray(p)) return d;
+        if (d !== null && typeof d === 'object' && !Array.isArray(d) && (typeof p !== 'object' || p === null)) return d;
+        return p;
+      } catch { return d; }
+    },
+    set(k, v) { try { localStorage.setItem('fant.' + k, JSON.stringify(v)); } catch { toast('Не удалось сохранить — память браузера переполнена'); } }
   };
 
   const state = {
@@ -183,6 +194,7 @@
     $('#hudRound').textContent = 'Круг ' + state.round;
     $('#hudLeft').textContent = 'в колесе ' + state.remaining.length + ' из ' + state.players.length;
     $('#hudBlitz').classList.toggle('hidden', !state.blitz);
+    $('#sepBlitz').classList.toggle('hidden', !state.blitz);   // без блица не остаётся двойного буллета
     // блиц теперь включается прямо с экрана колеса
     $('#blitzWheelBtn').classList.toggle('on', state.blitz);
   }
@@ -257,8 +269,20 @@
       inp.value = name;
       inp.addEventListener('input', () => { state.players[i] = inp.value.trim(); });
       inp.addEventListener('blur', () => {
-        const nv = inp.value.trim();
-        state.players[i] = nv;               // сначала актуальное имя — renderPlayers ниже покажет его
+        let nv = inp.value.trim();
+        // дубль имени (среди игроков или в хранилищах) — откат, данные другого игрока не трогаем
+        const dup = nv && nv !== original && (
+          state.players.filter(p => p === nv).length > 1 ||
+          ['genders', 'chosen', 'stats', 'phStats'].some(k => store.get(k, {})[nv] !== undefined)
+        );
+        if (dup) {
+          nv = original;
+          state.players[i] = original;
+          inp.value = original;
+          toast('Имя «' + nv + '» уже есть — оставил «' + original + '»');
+        } else {
+          state.players[i] = nv;             // сначала актуальное имя — renderPlayers ниже покажет его
+        }
         // переименование: переносим пол/статистику/выпавшие задания под новый ключ
         if (nv && original && nv !== original) {
           [['genders'], ['chosen'], ['stats'], ['phStats']].forEach(([k]) => {
@@ -814,6 +838,7 @@
       $('#hintBox').classList.add('hidden');
       $('#secretBox').classList.remove('hidden');
       $('#secretTitle').innerHTML = '<b>' + esc(pending.name) + '</b>, возьми телефон';
+      $('#secretReadBtn').textContent = 'Прочитать задание';
       $('#secretReadBtn').classList.remove('hidden');
       panel.classList.add('hidden');
       showScreen('screen-reveal');
@@ -832,8 +857,10 @@
 
   /* ── Круги: Выполнил → вылетает до следующего круга; Не выполнил → остаётся ── */
   function completeTask(done) {
+    if (!pending) return;                 // двойной быстрый тап не должен писать статистику дважды
     stopSpeak();
     const name = pending.name;
+    pending = null;                       // ход завершён — защищаем от повторного вызова
     if (!state.stats[name]) state.stats[name] = newStats();
     if (done) {
       state.stats[name].done++;
@@ -903,7 +930,7 @@
     $('#hintBtn').classList.remove('hidden');
   });
 
-  /* ── Секретные задания: прочитать → скрыть ── */
+  /* ── Секретные задания: прочитать → скрыть → (можно перечитать) ── */
   $('#secretReadBtn').addEventListener('click', () => {
     $('#secretBox').classList.add('hidden');
     $('#revealText').classList.remove('hidden');
@@ -919,10 +946,12 @@
     $('#revealText').classList.add('hidden');
     $('#taskTimerBtn').classList.add('hidden');
     $('#modPlate').classList.add('hidden');
+    $('#hintBtn').classList.add('hidden');
     $('#secretHideBtn').classList.add('hidden');
     $('#secretBox').classList.remove('hidden');
     $('#secretTitle').textContent = 'Выполняй! Затем нажми «Выполнил» или «Не выполнил»';
-    $('#secretReadBtn').classList.add('hidden');
+    $('#secretReadBtn').textContent = 'Показать ещё раз';   // путь без возврата больше не секрет
+    $('#secretReadBtn').classList.remove('hidden');
     vibrate(40);
   });
 
@@ -978,7 +1007,9 @@
     $('#pairSpinBtn').classList.remove('hidden');
     $('#phraseGoBtn').classList.add('hidden');
     $('#pairCaption').textContent = 'Выберите пару!';
-    $('#phProgress').textContent = 'Пара ' + (state.players.length - phrase.queue.length + 1) + ' из ' + state.players.length;
+    // после последней пары queue пуст — не показываем «Пара N+1 из N»
+    const done = state.players.length - phrase.queue.length;
+    $('#phProgress').textContent = 'Пара ' + Math.min(done + 1, state.players.length) + ' из ' + state.players.length;
   }
 
   function drawPair() {
@@ -1059,7 +1090,11 @@
       const cats = phrase.mode === 'all' ? ['friendly', 'names', 'dark'] : [phrase.mode];
       phrase.bag = shuffle(cats.flatMap(c => window.PHRASE.prompts[c]).filter(t => !state.blacklist.includes(t)));
     }
-    const t = phrase.bag.pop() || window.PHRASE.prompts.friendly[0];
+    let t = phrase.bag.pop();
+    if (!t) {   // мешок пуст, а все фразы забанены — повторяем из нес забаненных, в крайнем случае из любых
+      const ok = window.PHRASE.prompts.friendly.filter(x => !state.blacklist.includes(x));
+      t = ok[Math.floor(Math.random() * ok.length)] || window.PHRASE.prompts.friendly[0];
+    }
     return t.replace(/\{room\}/g, () => ROOMS[Math.floor(Math.random() * ROOMS.length)])
             .replace(/\{object\}/g, () => OBJECTS[Math.floor(Math.random() * OBJECTS.length)]);
   }
@@ -1323,7 +1358,16 @@
   if (state.blitz) startBlitzClock();
   showScreen('screen-main');
 
+  // Escape закрывает модалки и всплывашку бана
+  addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    ['#settingsModal', '#statsModal', '#banPopup'].forEach(s => $(s).classList.add('hidden'));
+    banOpen = false;
+  });
+
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => reg.addEventListener('updatefound', () => toast('Вышла новая версия — обновите страницу')))
+      .catch(() => {});
   }
 })();
