@@ -797,6 +797,7 @@
     $('#revealText').classList.remove('hidden');
     $('#secretBox').classList.add('hidden');
     $('#secretHideBtn').classList.add('hidden');
+    $('#ttsBtn').classList.remove('hidden');       // не-секретное задание можно озвучить
     panel.classList.remove('hidden');
     revealSound(isTruth);
     showScreen('screen-reveal');
@@ -888,6 +889,7 @@
     if (tb.dataset.secs) tb.classList.remove('hidden');   // таймер показываем только после прочтения
     if (state.currentMod) $('#modPlate').classList.remove('hidden');
     if (state.currentHint) $('#hintBtn').classList.remove('hidden');
+    $('#ttsBtn').classList.add('hidden');                 // TTS-1: секрет вслух не читается даже по кнопке
     $('#taskPanel').classList.remove('hidden');
     $('#secretHideBtn').classList.remove('hidden');
     vibrate(40);
