@@ -68,9 +68,27 @@
   const app = $('#app');
   app.dataset.level = state.level;
 
+  /* ── NAV-1: системная кнопка «Назад» ходит по экранам приложения ──
+     каждый показ экрана кладёт запись в history; модалки/попапы — свои записи,
+     «Назад» закрывает их первым; popstate возвращает на предыдущий экран */
+  let navFromPop = false;   // показ экрана из popstate не кладёт новую запись
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+    if (!navFromPop) { try { history.pushState({ fant: id }, ''); } catch {} }
   }
+  const activeScreenId = () => document.querySelector('.screen.active')?.id || '';
+  window.addEventListener('popstate', e => {
+    // открытая модалка закрывается первым «Назад», экран не дёргается
+    const modal = document.querySelector('.modal:not(.hidden)');
+    if (modal) { closeModal('#' + modal.id); return; }
+    if (!$('#banPopup').classList.contains('hidden')) { hideBanPopup(); return; }
+    const st = e.state || {};
+    if (st.fant && st.fant !== activeScreenId()) {
+      navFromPop = true;
+      showScreen(st.fant);
+      navFromPop = false;
+    }
+  });
 
   /* ── Звук (WebAudio) ── */
   let actx = null;
@@ -1212,6 +1230,7 @@
   function openModal(sel) {
     modalOpener = document.activeElement;
     $(sel).classList.remove('hidden');
+    try { history.pushState({ fant: activeScreenId(), modal: sel.slice(1) }, ''); } catch {}
     const f = $(sel).querySelector('button:not(.hidden), input');
     if (f) f.focus();
   }
@@ -1319,6 +1338,7 @@
     p.style.left = Math.max(10, Math.min(x - w / 2, window.innerWidth - w - 10)) + 'px';
     p.style.top = Math.max(60, Math.min(y - 30, window.innerHeight - h - 10)) + 'px';
     p.classList.remove('hidden');
+    try { history.pushState({ fant: activeScreenId(), modal: 'banPopup' }, ''); } catch {}
   }
   function hideBanPopup() {
     banOpen = false;
@@ -1384,7 +1404,8 @@
   $('#perValue').textContent = phrase.per;
   syncPunishInputs();
   if (state.blitz) startBlitzClock();
-  showScreen('screen-main');
+  navFromPop = true; showScreen('screen-main'); navFromPop = false;
+  history.replaceState({ fant: 'screen-main' }, '');   // NAV-1: базовая запись без дубля
 
   // Escape закрывает модалки/всплывашку бана, Tab ходит по кругу внутри модалки
   addEventListener('keydown', e => {
