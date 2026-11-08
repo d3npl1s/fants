@@ -4,6 +4,7 @@
 
   const $ = s => document.querySelector(s);
   const DATA = window.FANT;
+  const { decline } = window.FANT_LANG;    // чистые функции из js/lang.js (тестируются на Node)
   const NAME_H = 150;                       // высота имени в ленте, px
   const SPIN_PAD = 8;                       // запас имён сверху и снизу ленты
   const PLAYER_COLORS = [
@@ -140,42 +141,7 @@
     return arr;
   };
 
-  /* ── Склонение имён: acc (кого), dat (кому), inst (с кем), gen (кого/чего) ── */
-  function decline(raw, cs) {
-    const name = String(raw).trim();
-    if (!/[а-яёА-ЯЁ]/.test(name)) {                     // латиница/ники: denplis → denplis'а, denplis'ом
-      const end = { acc: 'а', dat: 'у', inst: 'ом', gen: 'а' }[cs];
-      return end ? name + "'" + end : name;
-    }
-    const low = name.toLowerCase();
-    let forms;
-    if (low.endsWith('ия')) {                            // Мария → Марию, Марии, Марией
-      const s = low.slice(0, -1);
-      forms = { acc: s + 'ю', dat: s + 'и', inst: s + 'ей', gen: s + 'и' };
-    } else if (low.endsWith('ья')) {                     // Илья → Илью, Илье, Ильём
-      const s = low.slice(0, -2) + 'ь';
-      forms = { acc: s + 'ю', dat: s + 'е', inst: s + 'ём', gen: s + 'я' };
-    } else if (low.endsWith('я')) {                      // Даня → Даню, Дане, Даней, Дани
-      const s = low.slice(0, -1);
-      forms = { acc: s + 'ю', dat: s + 'е', inst: s + 'ей', gen: s + 'и' };
-    } else if (low.endsWith('а')) {                      // Ника → Нику, Нике, Никой, Ники
-      const s = low.slice(0, -1);
-      const hiss = /[кгхжшщч]$/.test(s);
-      forms = { acc: s + 'у', dat: s + 'е', inst: s + 'ой', gen: s + (hiss ? 'и' : 'ы') };
-    } else if (low.endsWith('й')) {                      // Андрей → Андрея, Андрею, Андреем
-      const s = low.slice(0, -1);
-      forms = { acc: s + 'я', dat: s + 'ю', inst: s + 'ем', gen: s + 'я' };
-    } else if (low.endsWith('ь')) {                      // Игорь → Игоря, Игорю, Игорем
-      const s = low.slice(0, -1);
-      forms = { acc: s + 'я', dat: s + 'ю', inst: s + 'ем', gen: s + 'я' };
-    } else {                                             // Денис → Дениса, Денису, Денисом
-      forms = { acc: low + 'а', dat: low + 'у', inst: low + 'ом', gen: low + 'а' };
-    }
-    let res = forms[cs] || name;
-    if (name[0] === name[0].toUpperCase()) res = res.charAt(0).toUpperCase() + res.slice(1);
-    return res;
-  }
-
+  /* ── Склонение имён — в js/lang.js (window.FANT_LANG.decline), тестируется на Node ── */
   /* ── Круги: кто остался в колесе ── */
   function resetRounds() {
     state.round = 1;
@@ -736,12 +702,14 @@
     // служебные токены в превью не показываем
     tpl = tpl.replace(/\s*\[\[таймер \d+\]\]/g, '').replace(/\s*\[\[тайно\]\]/g, '').replace(/\s*\[\[мод:[^\]]+\]\]/g, '').replace(/\s*\[\[пояснение:[^\]]+\]\]/g, '');
     // падежные токены: {other-acc} = кого, {other-dat} = кому, {other-inst} = с кем, {other-gen} = кого/чего
+    // пол нужен и для склонения: ь-имёна склоняются по-разному (Игорь/Любовь)
+    const gN = state.genders[name] || '', gO = state.genders[other] || '';
     const v = {
       'name': name, 'other': other,
-      'name-acc': decline(name, 'acc'), 'name-dat': decline(name, 'dat'),
-      'name-inst': decline(name, 'inst'), 'name-gen': decline(name, 'gen'),
-      'other-acc': decline(other, 'acc'), 'other-dat': decline(other, 'dat'),
-      'other-inst': decline(other, 'inst'), 'other-gen': decline(other, 'gen')
+      'name-acc': decline(name, 'acc', gN), 'name-dat': decline(name, 'dat', gN),
+      'name-inst': decline(name, 'inst', gN), 'name-gen': decline(name, 'gen', gN),
+      'other-acc': decline(other, 'acc', gO), 'other-dat': decline(other, 'dat', gO),
+      'other-inst': decline(other, 'inst', gO), 'other-gen': decline(other, 'gen', gO)
     };
     let html = tpl, plain = tpl;
     Object.keys(v).sort((a, b) => b.length - a.length).forEach(k => {
