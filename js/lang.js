@@ -69,5 +69,63 @@
     return capFrom(declinePart(name.toLowerCase(), cs, gender), name);
   }
 
-  root.FANT_LANG = { esc, decline };
+  /* ── Пол по имени (GENDER-1): пользовательский выбор приоритетнее, это fallback ── */
+  // мужские имена/уменьшительные на а/я, которые эвристика «на а — женщина» сломала бы
+  const MALE_A = new Set([
+    'никита', 'данила', 'илья', 'фома', 'кузьма', 'лука', 'ларион', 'данил',
+    // уменьшительные мужские
+    'саша', 'женя', 'миша', 'гоша', 'лёва', 'вася', 'дима', 'паша', 'коля', 'ваня',
+    'вова', 'юра', 'слава', 'саня', 'алёша', 'лёша', 'витя', 'костя', 'гриша',
+    'боря', 'сева', 'дёма', 'сеня', 'стёпа', 'федя', 'дёша', 'тоша'
+  ]);
+  function guessGender(raw) {
+    const low = String(raw).trim().toLowerCase();
+    if (!low) return '';
+    if (FEM_SOFT.has(low)) return 'f';
+    if (MALE_A.has(low)) return 'm';
+    if (/[ая]$/.test(low)) return 'f';
+    return 'm';
+  }
+
+  /* ── Рендер шаблона задания (GENDER-1): чистая функция ──
+     gN/gO — пол ('m'|'f'|'') игрока и второго имени; '' → нейтральный текст
+     без скобок: формы целиком через слэш «целовался/целовалась»,
+     короткие окончания отбрасываются (эвристика пола покрывает почти все имена) */
+  function renderTemplate(tpl, name, other, gN, gO) {
+    const g = gN || '';
+    const fullForm = (m, f) => (g === 'f' ? f : g === 'm' ? m : m + '/' + f);
+    if (g === 'f') {
+      tpl = tpl.replace(/\(([^()]+)\|([^()]+)\)/g, '$2');
+      tpl = tpl.replace(/\((а|ась|ся|ись|ла)\)/g, '$1');
+    } else if (g === 'm') {
+      tpl = tpl.replace(/\(([^()]+)\|([^()]+)\)/g, '$1');
+      tpl = tpl.replace(/\((а|ась|ся|ись|ла)\)/g, '');
+    } else {
+      tpl = tpl.replace(/\(([^()]+)\|([^()]+)\)/g, (s, m, f) => fullForm(m, f));
+      tpl = tpl.replace(/\((а|ась|ся|ись|ла)\)/g, '');
+    }
+    // служебные токены в превью не показываем
+    tpl = tpl.replace(/\s*\[\[таймер \d+\]\]/g, '').replace(/\s*\[\[тайно\]\]/g, '')
+             .replace(/\s*\[\[мод:[^\]]+\]\]/g, '').replace(/\s*\[\[пояснение:[^\]]+\]\]/g, '')
+             .replace(/\s*\[\[без-мод\]\]/g, '');
+    // падежные токены: {other-acc} = кого, {other-dat} = кому, {other-inst} = с кем, {other-gen} = кого/чего
+    const v = {
+      'name': name, 'other': other,
+      'name-acc': decline(name, 'acc', g), 'name-dat': decline(name, 'dat', g),
+      'name-inst': decline(name, 'inst', g), 'name-gen': decline(name, 'gen', g),
+      'other-acc': decline(other, 'acc', gO || ''), 'other-dat': decline(other, 'dat', gO || ''),
+      'other-inst': decline(other, 'inst', gO || ''), 'other-gen': decline(other, 'gen', gO || '')
+    };
+    let html = tpl, plain = tpl;
+    Object.keys(v).sort((a, b) => b.length - a.length).forEach(k => {
+      html = html.split('{' + k + '}').join('<b>' + esc(v[k]) + '</b>');
+      plain = plain.split('{' + k + '}').join(v[k]);
+    });
+    return { html, plain };
+  }
+
+  // остатки служебных символов не должны попадать в озвучку (GENDER-1.3)
+  const speakSafe = s => String(s).replace(/[()|\[\]{}]/g, '');
+
+  root.FANT_LANG = { esc, decline, guessGender, renderTemplate, speakSafe };
 })(typeof window !== 'undefined' ? window : globalThis);

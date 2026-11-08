@@ -6,7 +6,7 @@ globalThis.window = globalThis;
 require('../js/lang.js');
 require('../js/combo-data.js');
 
-const { decline } = window.FANT_LANG;
+const { decline, guessGender, renderTemplate, speakSafe } = window.FANT_LANG;
 
 let n = 0, fails = 0;
 function eq(actual, expected, label) {
@@ -58,6 +58,32 @@ eq(decline('Анна Мария', 'acc'), 'Анну Марию', 'acc Анна �
 eq(decline('denplis', 'inst'), "denplis'ом", 'inst латиница');
 // nom — само имя
 eq(decline('Саша', 'nom'), 'Саша', 'nom не определён → как есть');
+
+/* ── GENDER-1: эвристика пола ── */
+eq(guessGender('Саша'), 'm', 'guessGender Саша (м-уменьшительное)');
+eq(guessGender('Маша'), 'f', 'guessGender Маша');
+eq(guessGender('Илья'), 'm', 'guessGender Илья');
+eq(guessGender('Любовь'), 'f', 'guessGender Любовь');
+eq(guessGender('Никита'), 'm', 'guessGender Никита');
+eq(guessGender('Денис'), 'm', 'guessGender Денис');
+eq(guessGender(''), '', 'guessGender пустое');
+
+/* ── GENDER-1: renderTemplate во всех режимах пола ── */
+const tpl1 = '{name}, (целовался|целовалась) ли ты с {other-inst}?';
+eq(renderTemplate(tpl1, 'Маша', 'Дима', 'f', 'm').plain, 'Маша, целовалась ли ты с Димой?', 'rt ж-род');
+eq(renderTemplate(tpl1, 'Дима', 'Маша', 'm', 'f').plain, 'Дима, целовался ли ты с Машей?', 'rt м-род');
+const neutral = renderTemplate(tpl1, 'Xyz', 'Abc', '', '').plain;
+eq(neutral, "Xyz, целовался/целовалась ли ты с Abc'ом?", 'rt без пола — нейтральный слэш');
+ok(!/[()|]/.test(neutral), 'rt без пола — нет скобок и черты');
+const tpl2 = '{name}, отправил(а) сообщение';
+eq(renderTemplate(tpl2, 'Дима', '', 'm', '').plain, 'Дима, отправил сообщение', 'rt м: (а) убрано');
+eq(renderTemplate(tpl2, 'Маша', '', 'f', '').plain, 'Маша, отправила сообщение', 'rt ж: (а) → а');
+ok(!/[()]/.test(renderTemplate(tpl2, 'Xyz', '', '', '').plain), 'rt без пола: (а) не остаётся');
+// служебные токены вычищаются
+const tok = renderTemplate('{name}, скажи [[таймер 30]] [[тайно]] [[пояснение:х]] [[без-мод]]', 'Дима', '', 'm', '').plain;
+eq(tok, 'Дима, скажи', 'rt служебные токены удалены');
+// speakSafe: скобки, черты и фигурные скобки не для ушей
+eq(speakSafe('Ты (а) любопытн(а)|любопытна? {name}'), 'Ты а любопытналюбопытна? name', 'speakSafe чистит ()|{}');
 
 console.log(fails ? `\n${fails}/${n} упало` : `OK: ${n} проверок пройдено`);
 process.exit(fails ? 1 : 0);

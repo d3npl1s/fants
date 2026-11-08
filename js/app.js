@@ -4,7 +4,7 @@
 
   const $ = s => document.querySelector(s);
   const DATA = window.FANT;
-  const { decline } = window.FANT_LANG;    // чистые функции из js/lang.js (тестируются на Node)
+  const { decline, guessGender, renderTemplate, speakSafe } = window.FANT_LANG;  // чистые функции из js/lang.js (тестируются на Node)
   const NAME_H = 150;                       // высота имени в ленте, px
   const SPIN_PAD = 8;                       // запас имён сверху и снизу ленты
   const PLAYER_COLORS = [
@@ -111,7 +111,8 @@
     if (!state.tts || !('speechSynthesis' in window) || !text) return;
     try {
       speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
+      // родовые маркеры и служебные скобки не для ушей (GENDER-1.3)
+      const u = new SpeechSynthesisUtterance(speakSafe(text));
       u.lang = 'ru-RU';
       if (ruVoice) u.voice = ruVoice;
       u.rate = 1.02;
@@ -665,8 +666,8 @@
     // «случайный друг» фиксируется один раз: превью = то, что получишь после выбора
     pending.otherTruth = pickOther(name);
     pending.otherAction = pickOther(name);
-    const t = renderTemplate(pending.truth, name, pending.otherTruth);
-    const a = renderTemplate(pending.action, name, pending.otherAction);
+    const t = rt(pending.truth, name, pending.otherTruth);
+    const a = rt(pending.action, name, pending.otherAction);
     $('#truthPreview').innerHTML = t.html;
     $('#actionPreview').innerHTML = a.html;
     speak(name + ', правда или действие?');
@@ -688,35 +689,10 @@
     showScreen('screen-choice');
   }
 
-  function renderTemplate(tpl, name, other) {
-    // пол игрока: «(а)»-окончания → «а» или пусто; пол не указан — остаётся «(а)».
-    // формы целиком: «(благодарен|благодарна)» — м-форма или ж-форма
-    const g = state.genders[name];
-    if (g === 'f') {
-      tpl = tpl.replace(/\(([^()]+)\|([^()]+)\)/g, '$2');
-      tpl = tpl.replace(/\((а|ась|ся|ись|ла)\)/g, '$1');
-    } else if (g === 'm') {
-      tpl = tpl.replace(/\(([^()]+)\|([^()]+)\)/g, '$1');
-      tpl = tpl.replace(/\((а|ась|ся|ись|ла)\)/g, '');
-    }
-    // служебные токены в превью не показываем
-    tpl = tpl.replace(/\s*\[\[таймер \d+\]\]/g, '').replace(/\s*\[\[тайно\]\]/g, '').replace(/\s*\[\[мод:[^\]]+\]\]/g, '').replace(/\s*\[\[пояснение:[^\]]+\]\]/g, '');
-    // падежные токены: {other-acc} = кого, {other-dat} = кому, {other-inst} = с кем, {other-gen} = кого/чего
-    // пол нужен и для склонения: ь-имёна склоняются по-разному (Игорь/Любовь)
-    const gN = state.genders[name] || '', gO = state.genders[other] || '';
-    const v = {
-      'name': name, 'other': other,
-      'name-acc': decline(name, 'acc', gN), 'name-dat': decline(name, 'dat', gN),
-      'name-inst': decline(name, 'inst', gN), 'name-gen': decline(name, 'gen', gN),
-      'other-acc': decline(other, 'acc', gO), 'other-dat': decline(other, 'dat', gO),
-      'other-inst': decline(other, 'inst', gO), 'other-gen': decline(other, 'gen', gO)
-    };
-    let html = tpl, plain = tpl;
-    Object.keys(v).sort((a, b) => b.length - a.length).forEach(k => {
-      html = html.split('{' + k + '}').join('<b>' + esc(v[k]) + '</b>');
-      plain = plain.split('{' + k + '}').join(v[k]);
-    });
-    return { html, plain };
+  /* рендер шаблона — чистая функция в js/lang.js; пол: выбор игрока приоритетнее,
+     иначе эвристика по имени, иначе нейтральный текст без скобок (GENDER-1) */
+  function rt(tpl, name, other) {
+    return renderTemplate(tpl, name, other, state.genders[name] || guessGender(name), state.genders[other] || guessGender(other));
   }
 
   $('#choiceTruth').addEventListener('click', () => choose('truth'));
@@ -790,7 +766,7 @@
 
     // рендер уже вычищает все служебные токены; other тот же, что был в превью
     const chosenOther = isTruth ? pending.otherTruth : pending.otherAction;
-    const r = renderTemplate(raw, pending.name, chosenOther);
+    const r = rt(raw, pending.name, chosenOther);
     let plain = r.plain;
     if (mod && !secret) plain = plain.replace(/\.?\s*$/, '') + '. Условие: ' + mod;
     $('#revealText').innerHTML = r.html;
@@ -1075,7 +1051,7 @@
     const who = others[Math.floor(Math.random() * others.length)];
     const pool2 = others.filter(p => p !== who);
     const other = pool2[Math.floor(Math.random() * pool2.length)] || who;
-    const r = renderTemplate(tpl, who, other);
+    const r = rt(tpl, who, other);
     $('#phTaskMeta').textContent = phrase.current.reader + ' читает · фраза ' + (phrase.qInPair + 1) + ' из ' + phrase.per;
     $('#phTaskText').innerHTML = r.html;
     state.currentPlain = r.plain;
@@ -1319,7 +1295,7 @@
       }
       const otherKey = type === 'truth' ? 'otherTruth' : 'otherAction';
       pending[otherKey] = pickOther(pending.name);
-      const r = renderTemplate(pending[type], pending.name, pending[otherKey]);
+      const r = rt(pending[type], pending.name, pending[otherKey]);
       $(type === 'truth' ? '#truthPreview' : '#actionPreview').innerHTML = r.html;
       toast('Задание убрано из игры');
     }
