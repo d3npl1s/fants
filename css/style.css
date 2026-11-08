@@ -192,16 +192,20 @@ body {
 
 /* ── Карусель уровней ── */
 #screen-levels.active, #screen-games.active { display: flex; flex-direction: column; }
-/* пакеты заданий: чипы под шапкой */
+/* пакеты заданий: чипы под шапкой — сетка 2×2, ровные ряды */
 .packs-row {
-  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 76px); left: 0; right: 0; z-index: 6;
-  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
-  padding: 0 14px; pointer-events: none;
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 76px); left: 14px; right: 14px; z-index: 6;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px;
+  pointer-events: none;
 }
 .packs-row .pack-chip {
   pointer-events: auto; border: 2px solid rgba(255,255,255,.35); border-radius: 20px;
   background: rgba(33,38,92,.6); color: rgba(255,255,255,.75);
-  font-family: inherit; font-size: 13px; font-weight: 800; padding: 7px 14px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 800; padding: 8px 10px; cursor: pointer;
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+@media (min-width: 480px) {
+  .packs-row { grid-template-columns: repeat(4, 1fr); }
 }
 .packs-row .pack-chip.on {
   background: var(--white); color: var(--navy); border-color: var(--white);
@@ -227,7 +231,8 @@ body {
 }
 .level-icon { width: 130px; height: 130px; filter: drop-shadow(0 8px 14px rgba(0,0,0,.2)); }
 .level-name { font-size: 54px; font-weight: 800; text-shadow: 0 5px 0 rgba(0,0,0,.18); letter-spacing: 1px; }
-.level-tag { font-size: 19px; font-weight: 700; line-height: 1.5; max-width: 320px; text-shadow: 0 2px 6px rgba(0,0,0,.18); }
+/* фикс. высота под 3 строки: кнопка «Играть» на всех уровнях на одной высоте */
+.level-tag { font-size: 19px; font-weight: 700; line-height: 1.5; max-width: 320px; min-height: 86px; display: flex; align-items: center; justify-content: center; text-shadow: 0 2px 6px rgba(0,0,0,.18); }
 .level-card .play-btn { max-width: 320px; margin-top: 10px; }
 
 .dots-row {
@@ -591,7 +596,7 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   border: 3px solid rgba(255,255,255,.3);
 }
 .pair-track { position: absolute; left: 0; right: 0; top: 0; will-change: transform; display: flex; flex-direction: column; }
-.pair-item { height: 104px; flex: 0 0 104px; display: grid; place-items: center; font-size: 27px; font-weight: 800; color: #fff; text-align: center; padding: 0 10px; }
+.pair-item { height: 104px; flex: 0 0 104px; display: grid; place-items: center; font-size: 27px; font-weight: 800; color: #fff; text-align: center; padding: 0 10px; white-space: nowrap; }
 .pair-item.win-reader, .pair-item.win-reader span { background: #ffd166 !important; color: var(--navy) !important; }
 .pair-item.win-answer, .pair-item.win-answer span { background: #35d0aa !important; color: var(--navy) !important; }
 #pairSpinBtn { width: 128px; height: 128px; }

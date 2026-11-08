@@ -998,6 +998,18 @@
         html += `<div class="pair-item" style="background:${playerColor(i % n)}">${esc(state.players[i % n])}</div>`;
       }
       track.innerHTML = html;
+      // длинные имена («Вероника») ужимаем по ширине окна — одинаково для всех повторов
+      const sizes = {};
+      [...track.children].forEach(it => {
+        const nm = it.textContent;
+        if (!(nm in sizes)) {
+          let size = 27;
+          it.style.fontSize = size + 'px';
+          while (it.scrollWidth > it.clientWidth && size > 13) { size -= 1; it.style.fontSize = size + 'px'; }
+          sizes[nm] = size;
+        }
+        it.style.fontSize = sizes[nm] + 'px';
+      });
       // высота строки — из фактического DOM, чтобы JS и CSS не разошлись
       const H = track.children[0]?.offsetHeight || PHRASE_H_DEFAULT;
       track.style.transition = 'none';
