@@ -995,20 +995,28 @@
       const reps = 3;
       let html = '';
       for (let i = 0; i < n * (reps + 1); i++) {
-        html += `<div class="pair-item" style="background:${playerColor(i % n)}">${esc(state.players[i % n])}</div>`;
+        html += `<div class="pair-item" style="background:${playerColor(i % n)}"><span>${esc(state.players[i % n])}</span></div>`;
       }
       track.innerHTML = html;
-      // длинные имена («Вероника») ужимаем по ширине окна — одинаково для всех повторов
+      // проверка длины имени: ужимаем шрифт, пока текст не влезет с РАВНЫМИ отступами
+      // (меряем сам span против ширины окна минус паддинги — scrollWidth тут врёт:
+      //  центрированный переполняет в обе стороны и прячется в паддинг)
+      const PAD = 20;                        // 10px слева + 10px справа (css .pair-item)
       const sizes = {};
       [...track.children].forEach(it => {
         const nm = it.textContent;
         if (!(nm in sizes)) {
+          const span = it.querySelector('span');
+          const avail = it.clientWidth - PAD;
           let size = 27;
-          it.style.fontSize = size + 'px';
-          while (it.scrollWidth > it.clientWidth && size > 13) { size -= 1; it.style.fontSize = size + 'px'; }
+          span.style.fontSize = size + 'px';
+          while (span.getBoundingClientRect().width > avail && size > 13) {
+            size -= 1;
+            span.style.fontSize = size + 'px';
+          }
           sizes[nm] = size;
         }
-        it.style.fontSize = sizes[nm] + 'px';
+        it.querySelector('span').style.fontSize = sizes[nm] + 'px';
       });
       // высота строки — из фактического DOM, чтобы JS и CSS не разошлись
       const H = track.children[0]?.offsetHeight || PHRASE_H_DEFAULT;
