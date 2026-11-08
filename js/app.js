@@ -387,7 +387,14 @@
   });
   $('#backToGames').addEventListener('click', () => showScreen('screen-games'));
   $('#phraseBackBtn').addEventListener('click', () => showScreen('screen-games'));
-  $('#phraseRoundBackBtn').addEventListener('click', () => { renderModeChips(); showScreen('screen-phrase-setup'); });
+  // PHRASE-3: выход из круга — только через подтверждение, прогресс не теряется молча
+  $('#phraseRoundBackBtn').addEventListener('click', () => {
+    if (!confirm('Выйти? Прогресс круга пропадёт.')) return;
+    clearTimeout(phrase.pairTimer);
+    phrase.current = null;
+    renderModeChips();
+    showScreen('screen-phrase-setup');
+  });
 
   /* ══════════ Пакеты заданий (экран уровней) ══════════ */
   function buildPacksRow() {
@@ -972,6 +979,8 @@
 
   function phraseStart() {
     if (state.players.length < 2) { toast('Нужно минимум 2 игрока'); return; }
+    clearTimeout(phrase.pairTimer);        // PHRASE-2: отложенный callback старой пары не survives новый круг
+    phrase.current = null;                 // PHRASE-2
     phrase.bag = []; phrase.picks = 0; phrase.qInPair = 0;
     phrase.scores = {};
     state.players.forEach(nm => phrase.scores[nm] = []);
@@ -1062,7 +1071,8 @@
     $('#pairSpinBtn').classList.add('hidden');
     $('#phraseGoBtn').classList.add('hidden');
     $('#pairCaption').textContent = '...';
-    setTimeout(() => {
+    clearTimeout(phrase.pairTimer);        // PHRASE-2: двойной тап не плодит callback'и
+    phrase.pairTimer = setTimeout(() => {
       // подсветка выпавшей пары — чтобы финал был виден и в середине анимации
       ['#colReader', '#colAnswerer'].forEach(sel => {
         const tr = $(sel);
@@ -1106,6 +1116,8 @@
     btn.classList.remove('hidden');                    // после оценки пары кнопка возвращается
     btn.textContent = last ? 'Оценить пару' : 'Следующая фраза ›';
     $('#ratePanel').classList.add('hidden');
+    // PHRASE-1: очки получает отвечающий — подсказка говорит честно, за кого оценка
+    $('.rate-hint').textContent = 'Оценка зала за ответы ' + phrase.current.answerer;
     showScreen('screen-phrase-task');
   }
 
@@ -1173,15 +1185,22 @@
   $('#phrasePunishInput').addEventListener('blur', syncPunishInputs);
 
   function showPhResults() {
+    clearTimeout(phrase.pairTimer);
     const rows = state.players.map(nm => {
       const arr = phrase.scores[nm] || [];
       return { nm, sum: arr.reduce((a, b) => a + b, 0) };
     }).sort((a, b) => b.sum - a.sum);
-    const loser = rows[rows.length - 1];
+    const min = rows.length ? rows[rows.length - 1].sum : 0;
+    const max = rows.length ? rows[0].sum : 0;
+    // PHRASE-1: ничья за последнее место — помечаем всех, а не «кого в списке последним»
+    const losers = rows.filter(r => r.sum === min);
+    const winners = rows.filter(r => r.sum === max && max !== min);
     $('#phResultsTitle').textContent = 'Круг завершён';
     $('#phResultsTable').innerHTML = rows.map(r =>
-      `<div class="ph-result-row${r === loser ? ' loser' : ''}"><b>${esc(r.nm)}</b><span class="ph-score">${r.sum}</span></div>`).join('');
-    $('#phLoser').innerHTML = 'Последнее место — <b>' + esc(loser.nm) + '</b>: ' + esc(state.punish);
+      `<div class="ph-result-row${r.sum === min ? ' loser' : ''}"><b>${esc(r.nm)}</b><span class="ph-score">${r.sum}</span></div>`).join('');
+    $('#phLoser').innerHTML =
+      (winners.length ? 'Лучший результат — <b>' + winners.map(w => esc(w.nm)).join(' и ') + '</b> (' + max + '). ' : '') +
+      'Последнее место — <b>' + losers.map(l => esc(l.nm)).join(' и ') + '</b>: ' + esc(state.punish);
     showScreen('screen-phrase-results');
     vibrate([60, 60, 140]);
   }
