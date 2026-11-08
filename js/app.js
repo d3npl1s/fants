@@ -389,8 +389,9 @@
   $('#gamesTrack').addEventListener('click', e => {
     const b = e.target.closest('[data-play]');
     if (!b) return;
-    if (b.dataset.play === 'fants') { showScreen('screen-levels'); syncCarousel(); openSettings(); }
-    else { renderModeChips(); showScreen('screen-phrase-setup'); openSettings(); }
+    // настройки открываются только по кнопке-меню, не поверх каждой игры
+    if (b.dataset.play === 'fants') { showScreen('screen-levels'); syncCarousel(); }
+    else { renderModeChips(); showScreen('screen-phrase-setup'); }
   });
   $('#backToGames').addEventListener('click', () => showScreen('screen-games'));
   $('#phraseBackBtn').addEventListener('click', () => showScreen('screen-games'));

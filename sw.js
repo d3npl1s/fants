@@ -3,17 +3,27 @@ const VERSION = '1.3.1';   // должна совпадать с ?v= в index.ht
 const CACHE = 'fant-v' + VERSION;
 // предзакеш идёт с тем же ?v=, что и запросы из index.html:
 // caches.match сравнивает URL вместе с query — без версии ассет не найдётся
-const ASSETS = [
+const withV = u => (u.endsWith('/') || u.endsWith('.html') ? u : u + '?v=' + VERSION);
+// ядро: без него офлайн невозможен — addAll атомарен, эти файлы обязаны существовать
+const CORE = [
   './', './index.html',
-  './css/style.css', './js/data.js', './js/combo-data.js', './js/phrase-data.js', './js/app.js',
+  './css/style.css', './js/data.js', './js/combo-data.js', './js/phrase-data.js', './js/app.js'
+].map(withV);
+// остальное (иконки, шрифты): один 404 не должен ломать установку SW целиком
+const EXTRA = [
   './manifest.webmanifest', './icon.svg', './apple-touch-icon.png', './icon-192.png', './icon-512.png',
   './fonts/montserrat-500-cyrillic.woff2', './fonts/montserrat-500-latin.woff2',
   './fonts/montserrat-700-cyrillic.woff2', './fonts/montserrat-700-latin.woff2',
   './fonts/montserrat-800-cyrillic.woff2', './fonts/montserrat-800-latin.woff2'
-].map(u => (u.endsWith('/') || u.endsWith('.html') ? u : u + '?v=' + VERSION));
+].map(withV);
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE).then(async c => {
+      await c.addAll(CORE);                                  // атомарно: ядро — всё или ничего
+      await Promise.allSettled(EXTRA.map(u => c.add(u)));    // отсутствие иконки/шрифта не фатально
+    }).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
