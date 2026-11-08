@@ -7,6 +7,7 @@ require('../js/lang.js');
 require('../js/combo-data.js');
 
 const { decline, guessGender, renderTemplate, speakSafe } = window.FANT_LANG;
+const COMBO = window.COMBO;
 
 let n = 0, fails = 0;
 function eq(actual, expected, label) {
@@ -84,6 +85,28 @@ const tok = renderTemplate('{name}, скажи [[таймер 30]] [[тайно]
 eq(tok, 'Дима, скажи', 'rt служебные токены удалены');
 // speakSafe: скобки, черты и фигурные скобки не для ушей
 eq(speakSafe('Ты (а) любопытн(а)|любопытна? {name}'), 'Ты а любопытналюбопытна? name', 'speakSafe чистит ()|{}');
+
+/* ── COMBO-1: совместимость глагол × формат, 10 000 генераций ── */
+// копия логики выбора комбо из drawTask (app.js) на чистых данных
+function comboDraw() {
+  const obj = COMBO.objects[Math.floor(Math.random() * COMBO.objects.length)];
+  const v = obj.verbs[Math.floor(Math.random() * obj.verbs.length)];
+  const fms = COMBO.formats.filter(f => !f.verbs || f.verbs.includes(v));
+  const fm = fms[Math.floor(Math.random() * fms.length)];
+  const objPhrase = (v === 'расскажи' && obj.tell) ? obj.tell : obj.o;
+  return v + ' ' + objPhrase + ' ' + fm.f;
+}
+for (let i = 0; i < 10000; i++) {
+  const s = comboDraw();
+  ok(!/^(расскажи|отрекламируй) .*без слов/.test(s), 'комбо без абсурда: ' + s);
+  ok(!/^изобрази .*в рифму/.test(s) && !/^покажи .*в рифму/.test(s), 'в рифму без изобрази/покажи: ' + s);
+  ok(!/^изобрази .*как ведущий/.test(s) && !/^покажи .*как ведущий/.test(s), 'новости без изобрази/покажи: ' + s);
+  ok(!/^расскажи (?!про)/.test(s), 'расскажи управляет падежом («про»): ' + s);
+}
+// «без слов» должен оставаться достижимым: пантомима не исчезла
+let secretSeen = false;
+for (let i = 0; i < 20000 && !secretSeen; i++) if (/без слов/.test(comboDraw())) secretSeen = true;
+ok(secretSeen, 'комбо «без слов» всё ещё генерируется');
 
 console.log(fails ? `\n${fails}/${n} упало` : `OK: ${n} проверок пройдено`);
 process.exit(fails ? 1 : 0);

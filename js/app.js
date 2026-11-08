@@ -483,7 +483,10 @@
       for (let a = 0; a < 6; a++) {
         const obj = COMBO.objects[Math.floor(Math.random() * COMBO.objects.length)];
         const v = obj.verbs[Math.floor(Math.random() * obj.verbs.length)];
-        const fm = COMBO.formats[Math.floor(Math.random() * COMBO.formats.length)];
+        // формат совместим с глаголом (COMBO-1): «расскажи … без слов» не генерируется
+        const fms = COMBO.formats.filter(f => !f.verbs || f.verbs.includes(v));
+        if (!fms.length) continue;
+        const fm = fms[Math.floor(Math.random() * fms.length)];
         const skel = v + '|' + obj.o;
         // один объект не должен выпасть несколько раз подряд (жалоба на тройную чайку)
         if (state.comboBan.includes(skel) || state.recentSkel.includes(skel) || state.recentObj.includes(obj.o)) continue;
@@ -493,8 +496,10 @@
         state.recentObj = state.recentObj.slice(-3);
         // «без слов» — секретная пантомима (крокодил) с таймером на подумать
         const tokens = fm.secret ? ' [[тайно]] [[таймер ' + fm.timer + ']]' : '';
+        // «расскажи» управляет падежом: «про новый год», а не «расскажи новый год»
+        const objPhrase = (v === 'расскажи' && obj.tell) ? obj.tell : obj.o;
         // tpl: null — комбо не пишутся в chosen/blacklist, их ведут recentSkel + comboBan
-        return { text: '{name}, ' + v + ' ' + obj.o + ' ' + fm.f + '.' + tokens, tpl: null, skel };
+        return { text: '{name}, ' + v + ' ' + objPhrase + ' ' + fm.f + '.' + tokens, tpl: null, skel };
       }
     }
     const bagKey = level + ':' + type;
@@ -1280,7 +1285,7 @@
         store.set('blacklist', state.blacklist);
         state.bags = {};                                   // пересобрать мешки без убранного
       } else if (type === 'action' && pending.actionSkel) {
-        // комбинаторное: бан по скелету «глагол|объект» — исчезают все 6 его форматов
+        // комбинаторное: бан по скелету «глагол|объект» — исчезают все 4 его формата
         if (!state.comboBan.includes(pending.actionSkel)) {
           state.comboBan.push(pending.actionSkel);
           store.set('comboBan', state.comboBan);
