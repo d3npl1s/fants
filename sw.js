@@ -40,10 +40,14 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Версионированные ассеты (?v=NNN) — cache-first: новый ?v = новый запрос = сеть
+  // не-GET запросы SW не перехватывает — кешировать их нельзя
+  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  // Версионированные ассеты (?v=NNN) — cache-first: новый ?v = новый запрос = сеть.
+  // В кеш кладём только успешные same-origin ответы: один 404 не должен
+  // закешироваться навсегда (cache-first уже никогда не спросит сеть)
   e.respondWith(
     caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      if (e.request.method === 'GET' && url.origin === location.origin) {
+      if (res.ok && res.type === 'basic') {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
       }

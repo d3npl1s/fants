@@ -1391,9 +1391,19 @@
   });
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    // есть ли уже контролирующий SW на момент регистрации: если нет — это первый
+    // визит (install), а не обновление, и тост про «новую версию» показывать нельзя
     navigator.serviceWorker.register('sw.js')
       .then(reg => {
-        reg.addEventListener('updatefound', () => toast('Вышла новая версия — обновите страницу'));
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              toast('Вышла новая версия — обновите страницу');
+            }
+          });
+        });
         // давно открытая вкладка сама узнаёт об обновлении — раз в час
         setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
       })
