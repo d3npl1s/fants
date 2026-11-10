@@ -349,6 +349,7 @@ body {
   display: flex; flex-direction: column; gap: 10px;
   color: #fff; box-shadow: var(--shadow);
   transition: transform .15s, opacity .25s;
+  -webkit-touch-callout: none;   /* BAN-1: долгое нажатие = бан, системный callout мешает */
 }
 .choice-card.truth  { background: var(--navy); }
 .choice-card.action { background: #c81468; }

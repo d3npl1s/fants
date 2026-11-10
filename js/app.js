@@ -747,6 +747,11 @@
       ? 'Действие уже выбрано раз подряд. Ещё раз — и в следующий раз его выбрать будет нельзя.' : '';
 
     showScreen('screen-choice');
+    // BAN-1: одноразовая подсказка про долгое нажатие — функция иначе не находится
+    if (!store.get('banHint', false)) {
+      store.set('banHint', true);
+      toast('Задание не понравилось? Зажми карточку, чтобы убрать');
+    }
   }
 
   /* рендер шаблона — чистая функция в js/lang.js; пол: выбор игрока приоритетнее,
@@ -1274,6 +1279,20 @@
   $('#punishInput').addEventListener('blur', () => {
     $('#punishInput').value = state.punish;
   });
+  // BAN-1: убранное долгим нажатием можно вернуть, историю выпавших — обнулить
+  $('#setUnbanBtn').addEventListener('click', () => {
+    state.blacklist = [];
+    state.comboBan = [];
+    store.set('blacklist', state.blacklist);
+    store.set('comboBan', state.comboBan);
+    state.bags = {};                        // мешки пересоберутся вместе с возвращёнными
+    toast('Убранные задания вернулись в игру');
+  });
+  $('#setChosenResetBtn').addEventListener('click', () => {
+    state.chosen = {};
+    store.set('chosen', state.chosen);
+    toast('История выпавших сброшена');
+  });
   $('#setStatsBtn').addEventListener('click', () => {
     closeModal('#settingsModal');
     renderStats('Статистика');
@@ -1347,6 +1366,7 @@
   ['choiceTruth', 'choiceAction'].forEach(id => {
     const card = $('#' + id);
     const type = id === 'choiceTruth' ? 'truth' : 'action';
+    card.addEventListener('contextmenu', e => e.preventDefault());   // BAN-1: системное меню iOS/Android
     card.addEventListener('pointerdown', e => {
       if (!e.isPrimary) return;
       lpPos = { x: e.clientX, y: e.clientY };
@@ -1391,6 +1411,10 @@
     hideBanPopup();
   });
   $('#banNo').addEventListener('click', hideBanPopup);
+  // BAN-1: тап мимо попапа закрывает его; карточки исключены — там живёт долгое нажатие
+  document.addEventListener('pointerdown', e => {
+    if (banOpen && !e.target.closest('#banPopup') && !e.target.closest('.choice-card')) hideBanPopup();
+  }, true);
 
   /* ── Старт: главный экран ── */
   buildCarousel();
