@@ -127,5 +127,36 @@
   // остатки служебных символов не должны попадать в озвучку (GENDER-1.3)
   const speakSafe = s => String(s).replace(/[()|\[\]{}]/g, '');
 
-  root.FANT_LANG = { esc, decline, guessGender, renderTemplate, speakSafe };
+  /* ── PREVIEW-1: секретное задание ([[тайно]]) не показывается в превью выбора ──
+     Возвращает короткую подпись для карточки или null — тогда превью рендерится
+     как обычно. Исходный текст наружу не отдаётся: раскрытие только через
+     приватный сценарий «возьми телефон» на экране задания */
+  function choicePreview(tpl, kind) {
+    return /\[\[тайно\]\]/.test(String(tpl)) ? (kind === 'truth' ? 'Секретный вопрос' : 'Секретное действие') : null;
+  }
+
+  /* ── Таймер из текста задания: цифры, слова («одну минуту») и «10-секундный» ── */
+  function detectTimerSecs(raw) {
+    const m = String(raw).match(/\[\[таймер (\d+)\]\]/);
+    if (m) return parseInt(m[1], 10);
+    const a = raw.match(/(\d+)\s*[-—]?\s*(секунд\S*|сек\b|минут\S*|мин\b)/);
+    if (a) return /мин/.test(a[2]) ? parseInt(a[1], 10) * 60 : parseInt(a[1], 10);
+    const w = raw.match(/(одну|две|три|четыре|пять)\s+(минут\S*|мин\b)/);
+    if (w) return ({ одну: 1, две: 2, три: 3, четыре: 4, пять: 5 })[w[1]] * 60;
+    return 0;
+  }
+
+  /* ── WHEEL-1: пул индексов колеса — последний победитель исключается,
+     только когда игроков в пуле не меньше трёх (иначе результат предопределён) ── */
+  function wheelPool(rem, recent) {
+    const idx = rem.map((_, i) => i);
+    const last = recent[recent.length - 1];
+    if (rem.length >= 3 && last !== undefined) {
+      const noRepeat = idx.filter(i => rem[i] !== last);
+      if (noRepeat.length) return noRepeat;
+    }
+    return idx;
+  }
+
+  root.FANT_LANG = { esc, decline, guessGender, renderTemplate, speakSafe, choicePreview, detectTimerSecs, wheelPool };
 })(typeof window !== 'undefined' ? window : globalThis);

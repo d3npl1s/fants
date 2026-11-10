@@ -4,7 +4,7 @@
 
   const $ = s => document.querySelector(s);
   const DATA = window.FANT;
-  const { decline, guessGender, renderTemplate, speakSafe } = window.FANT_LANG;  // чистые функции из js/lang.js (тестируются на Node)
+  const { decline, guessGender, renderTemplate, speakSafe, choicePreview, detectTimerSecs, wheelPool } = window.FANT_LANG;  // чистые функции из js/lang.js (тестируются на Node)
   // SPIN-1: высоты строк лент берутся из CSS-переменных — JS и CSS больше не расходятся
   const cssPx = (prop, fallback) => {
     try {
@@ -78,6 +78,14 @@
   app.dataset.level = state.level;
   // STORE-1: повреждённые числа не дают NaN ни в степпере, ни в HUD
   state.round = Math.max(1, Math.floor(Number(state.round) || 1));
+  // STORE-1: счётчики статистики чинятся при загрузке — битые значения (строки,
+  // отрицательные, NaN) не доезжают до сводок, а рост ограничен сверху
+  const clampCount = v => { v = Math.floor(Number(v)); return isFinite(v) ? Math.min(99999, Math.max(0, v)) : 0; };
+  Object.keys(state.stats).forEach(nm => {
+    const s = state.stats[nm] || {};
+    state.stats[nm] = { truth: clampCount(s.truth), action: clampCount(s.action), done: clampCount(s.done), fails: clampCount(s.fails) };
+  });
+  store.set('stats', state.stats);
 
   /* ── NAV-1: системная кнопка «Назад» ходит по экранам приложения ──
      каждый показ экрана кладёт запись в history; модалки/попапы — свои записи,
@@ -579,10 +587,10 @@
     // Hot не комбинируется: там только авторские задания под тематику уровня
     if (type === 'action' && level !== 'hot' && Math.random() < .2) {
       for (let a = 0; a < 6; a++) {
-        const obj = COMBO.objects[Math.floor(Math.random() * COMBO.objects.length)];
+        const obj = DATA.combo.objects[Math.floor(Math.random() * DATA.combo.objects.length)];
         const v = obj.verbs[Math.floor(Math.random() * obj.verbs.length)];
         // формат совместим с глаголом (COMBO-1): «расскажи … без слов» не генерируется
-        const fms = COMBO.formats.filter(f => !f.verbs || f.verbs.includes(v));
+        const fms = DATA.combo.formats.filter(f => !f.verbs || f.verbs.includes(v));
         if (!fms.length) continue;
         const fm = fms[Math.floor(Math.random() * fms.length)];
         const skel = v + '|' + obj.o;
@@ -660,14 +668,9 @@
 
     const rem = state.remaining.length ? state.remaining : [...state.players];
     const n = rem.length;
-    // анти-повтор (WHEEL-1): исключаем только ПОСЛЕДНЕГО выпавшего и только при ≥3 игроках —
-    // иначе при трёх оставшихся результат предопределён, а при четырёх шансы 50/50
-    const lastWinner = state.recent[state.recent.length - 1];
-    let pool = rem.map((_, i) => i);
-    if (rem.length >= 3 && lastWinner !== undefined) {
-      const noRepeat = pool.filter(i => rem[i] !== lastWinner);
-      if (noRepeat.length) pool = noRepeat;
-    }
+    // анти-повтор (WHEEL-1): pool — чистая функция в js/lang.js, последний выпавший
+    // исключается только при ≥3 игроках; проверяется симуляцией в тестах
+    const pool = wheelPool(rem, state.recent);
     const chosenIdx = pool[Math.floor(Math.random() * pool.length)];
     const pad = SPIN_PAD;
     const dir = opts.dir || 1;                                   // 1 — лента вверх, -1 — вниз
@@ -781,10 +784,8 @@
     // «случайный друг» фиксируется один раз: превью = то, что получишь после выбора
     pending.otherTruth = pickOther(name);
     pending.otherAction = pickOther(name);
-    const t = rt(pending.truth, name, pending.otherTruth);
-    const a = rt(pending.action, name, pending.otherAction);
-    $('#truthPreview').innerHTML = t.html;
-    $('#actionPreview').innerHTML = a.html;
+    renderChoicePreview('truth');
+    renderChoicePreview('action');
     speak(name + ', правда или действие?');
 
     // лимит: тот же вариант не больше 2 раз подряд (сброс — выбором противоположного)
@@ -815,6 +816,17 @@
     return renderTemplate(tpl, name, other, state.genders[name] || guessGender(name), state.genders[other] || guessGender(other));
   }
 
+  /* PREVIEW-1: единая отрисовка превью карточки выбора. Секретное задание ([[тайно]])
+     не рендерится вовсе — только короткая подпись: rt() не вызывается, исходный текст
+     не попадает ни в DOM, ни в title/aria-label/data-*. Он живёт в pending и раскрывается
+     только приватным сценарием «возьми телефон» на экране задания */
+  function renderChoicePreview(type) {
+    const el = $(type === 'truth' ? '#truthPreview' : '#actionPreview');
+    const secretLabel = choicePreview(pending[type], type);
+    if (secretLabel) el.textContent = secretLabel;
+    else el.innerHTML = rt(pending[type], pending.name, type === 'truth' ? pending.otherTruth : pending.otherAction).html;
+  }
+
   $('#choiceTruth').addEventListener('click', () => choose('truth'));
   $('#choiceAction').addEventListener('click', () => choose('action'));
 
@@ -834,16 +846,7 @@
   }
 
   /* ══════════ Экран 5: задание ══════════ */
-  // таймер из текста: цифры, слова («одну минуту») и «10-секундный»
-  function detectTimerSecs(raw) {
-    const m = raw.match(/\[\[таймер (\d+)\]\]/);
-    if (m) return parseInt(m[1], 10);
-    const a = raw.match(/(\d+)\s*[-—]?\s*(секунд\S*|сек\b|минут\S*|мин\b)/);
-    if (a) return /мин/.test(a[2]) ? parseInt(a[1], 10) * 60 : parseInt(a[1], 10);
-    const w = raw.match(/(одну|две|три|четыре|пять)\s+(минут\S*|мин\b)/);
-    if (w) return ({ одну: 1, две: 2, три: 3, четыре: 4, пять: 5 })[w[1]] * 60;
-    return 0;
-  }
+  // detectTimerSecs вынесен в js/lang.js (тестируется на Node)
 
   function reveal(type) {
     const raw = pending[type];          // сырой шаблон: все служебные токены на месте
@@ -1060,6 +1063,12 @@
   phrase.per = Math.min(10, Math.max(1, Math.floor(Number(phrase.per) || 5)));   // STORE-1
   // накопительные средние оценки по игрокам: { имя: { sum, count } }
   let phStats = store.get('phStats', {});
+  // STORE-1: оценки — тоже числа, битые ключи не ломают среднее
+  Object.keys(phStats).forEach(nm => {
+    const p = phStats[nm] || {};
+    phStats[nm] = { sum: clampCount(p.sum), count: clampCount(p.count) };
+  });
+  store.set('phStats', phStats);
 
   function renderModeChips() {
     $('#modeChips').innerHTML = window.PHRASE.modes.map(m =>
@@ -1486,8 +1495,7 @@
       }
       const otherKey = type === 'truth' ? 'otherTruth' : 'otherAction';
       pending[otherKey] = pickOther(pending.name);
-      const r = rt(pending[type], pending.name, pending[otherKey]);
-      $(type === 'truth' ? '#truthPreview' : '#actionPreview').innerHTML = r.html;
+      renderChoicePreview(type);   // PREVIEW-1: новое задание после бана — через тот же помощник
       toast('Задание убрано из игры');
     }
     hideBanPopup();
