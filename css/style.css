@@ -616,7 +616,7 @@ button.set-btn b { opacity: .85; font-weight: 800; }
 .pair-role.r-reader { background: #8a6f14; }
 .pair-role.r-answer { background: #0f6f5a; }
 .pair-win {
-  width: min(158px, calc(50vw - 24px)); height: 104px; border-radius: 18px; overflow: hidden; position: relative;
+  width: min(158px, calc(50vw - 24px)); height: var(--pair-item-h); border-radius: 18px; overflow: hidden; position: relative;
   background: var(--navy); box-shadow: var(--shadow);
   border: 3px solid rgba(255,255,255,.3);
 }
@@ -785,6 +785,17 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   .reveal-inner { bottom: 132px; padding-top: calc(env(safe-area-inset-top, 0px) + 40px); gap: 12px; }
   .reveal-type { font-size: 36px; }
   .reveal-text { font-size: 18px; }
+  /* экран пары «Продолжи фразу»: столбики ниже, подпись не наезжает (ландшафт) */
+  :root { --pair-item-h: 64px; }
+  .phrase-round-inner { padding-top: calc(env(safe-area-inset-top, 0px) + 44px); }
+  .pair-cols { margin-top: 8px; gap: 14px; }
+  .pair-item { font-size: 20px; }
+  .pair-caption { min-height: 40px; font-size: 16px; }
+  .ph-controls { gap: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
+  #pairSpinBtn { width: 88px; height: 88px; }
+  #pairSpinBtn svg { width: 40px; height: 40px; }
+  #phraseGoBtn { padding: 14px 16px; font-size: 19px; }
+  .ph-progress { padding: 6px 14px; font-size: 13px; }
 }
 /* уважение к системной настройке «меньше движения»
    (специфичность: .ps1–.ps3 — два класса, гасим каждый явно) */

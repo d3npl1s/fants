@@ -682,7 +682,9 @@
       const pIdx = ((i - pad) % n + n) % n;
       const pname = rem[pIdx];
       const cIdx = Math.max(0, state.players.indexOf(pname));   // цвет — по позиции в общем списке
-      html += `<div class="spin-name" data-i="${i}"><span style="background:${playerColor(cIdx)}">${esc(pname)}</span></div>`;
+      // PLAYERS-3: длинное имя ужимается, а не вылезает за экран 320px
+      const tight = pname.length > 10 ? ' font-size:26px;padding:14px 22px;min-width:0;letter-spacing:0' : '';
+      html += `<div class="spin-name" data-i="${i}"><span style="background:${playerColor(cIdx)}${tight}">${esc(pname)}</span></div>`;
     }
     track.innerHTML = html;
 
