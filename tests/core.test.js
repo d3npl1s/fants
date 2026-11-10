@@ -244,24 +244,18 @@ Object.keys(PHRASE.prompts).forEach(cat => {
     });
   });
 });
-// счётчики базы защищены тестом: числа в README не разойдутся с данными
-const TCNT = {
-  'fun.truth': FANT.tasks.fun.truth.length, 'fun.action': FANT.tasks.fun.action.length,
-  'soft.truth': FANT.tasks.soft.truth.length, 'soft.action': FANT.tasks.soft.action.length,
-  'hot.truth': FANT.tasks.hot.truth.length, 'hot.action': FANT.tasks.hot.action.length
-};
-eq(TCNT['fun.truth'], 56, 'fun.truth = 56');
-eq(TCNT['fun.action'], 55, 'fun.action = 55');
-eq(TCNT['soft.truth'], 68, 'soft.truth = 68');
-eq(TCNT['soft.action'], 92, 'soft.action = 92');
-eq(TCNT['hot.truth'], 40, 'hot.truth = 40');
-eq(TCNT['hot.action'], 51, 'hot.action = 51');
-eq(Object.values(TCNT).reduce((a, b) => a + b, 0), 362, 'база = 362 (как в README)');
-eq(FANT.packs.reduce((a, p) => a + p.truth.length + p.action.length, 0), 34, 'пакеты = 34 (как в README)');
-eq(PHRASE.prompts.friendly.length, 85, 'friendly = 85 (как в README)');
-eq(PHRASE.prompts.names.length, 75, 'names = 75 (как в README)');
-eq(PHRASE.prompts.dark.length, 55, 'dark = 55 (как в README)');
-eq(Object.values(PHRASE.prompts).reduce((a, arr) => a + arr.length, 0), 215, 'фразы = 215 (как в README)');
+// счётчики базы защищены тестом: единая точка — tests/counts.js (числа README)
+const COUNTS = require('./counts.js');
+Object.entries(COUNTS.tasks).forEach(([k, v]) => {
+  const [lv, tp] = k.split('.');
+  eq(FANT.tasks[lv][tp].length, v, `${k} = ${v} (counts.js)`);
+});
+eq(Object.values(COUNTS.tasks).reduce((a, b) => a + b, 0), COUNTS.baseTotal, 'counts.js: сумма tasks = baseTotal');
+eq(Object.values(FANT.tasks).reduce((a, lv) => a + lv.truth.length + lv.action.length, 0), COUNTS.baseTotal, `база = ${COUNTS.baseTotal} (как в README)`);
+eq(FANT.packs.reduce((a, p) => a + p.truth.length + p.action.length, 0), COUNTS.packs, `пакеты = ${COUNTS.packs} (как в README)`);
+Object.entries(COUNTS.phrases).forEach(([k, v]) => eq(PHRASE.prompts[k].length, v, `${k} = ${v} (counts.js)`));
+eq(Object.values(COUNTS.phrases).reduce((a, b) => a + b, 0), COUNTS.phrasesTotal, 'counts.js: сумма phrases = phrasesTotal');
+eq(Object.values(PHRASE.prompts).reduce((a, arr) => a + arr.length, 0), COUNTS.phrasesTotal, `фразы = ${COUNTS.phrasesTotal} (как в README)`);
 ok(FANT.packs.length === 3 && FANT.packs.every(p => p.truth.length && p.action.length), 'пакеты на месте (3, непустые)');
 
 console.log(fails ? `\n${fails}/${n} упало` : `OK: ${n} проверок пройдено`);
