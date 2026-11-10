@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#21265c">
+<meta name="description" content="Пати-игра для компании: колесо выбирает игрока, правда или действие — задание. Работает офлайн.">
+<meta property="og:title" content="Фанты — правда или действие">
+<meta property="og:description" content="Колесо выбирает игрока, задание — подсказывает, что делать. Плюс «Продолжи фразу». Работает офлайн.">
+<meta property="og:image" content="icon-512.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Фанты">
 <title>Фанты — правда или действие</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -29,11 +35,6 @@
 
   <!-- ══════════ Шапка ══════════ -->
   <header class="topbar">
-    <button class="crown-btn" id="crownBtn" aria-label="Премиум">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
-        <path d="M4 17.5 3 8l5 3.5L12 5l4 6.5L21 8l-1 9.5z"/>
-      </svg>
-    </button>
     <button class="dots-btn" id="menuBtn" aria-label="Меню">
       <span></span><span></span><span></span>
     </button>
@@ -90,9 +91,9 @@
       <div class="ph-field important">
         <label>Вопросов на человека</label>
         <div class="stepper">
-          <button id="perMinus">−</button>
+          <button id="perMinus" aria-label="Меньше вопросов">−</button>
           <b id="perValue">5</b>
-          <button id="perPlus">＋</button>
+          <button id="perPlus" aria-label="Больше вопросов">＋</button>
         </div>
       </div>
 
@@ -104,9 +105,9 @@
 
       <div class="ph-field">
         <label>Наказание за последнее место</label>
-        <input id="phrasePunishInput" class="ph-punish-input" maxlength="60" placeholder="пей стопку">
+        <input id="phrasePunishInput" class="ph-punish-input" maxlength="60" placeholder="штрафное задание">
       </div>
-      <button class="ghost-btn" id="phraseStatsBtn2">Статистика средних оценок</button>
+      <button class="ghost-btn" id="phraseStatsBtn2">Средние оценки</button>
 
       <div class="setup-actions">
         <button class="play-btn big" id="phraseStartBtn"><span>Начать</span><i class="chev">›</i></button>
@@ -208,7 +209,7 @@
   <section class="screen screen-choice" id="screen-choice">
     <div class="choice-inner">
       <p class="choice-hint">Выпадает</p>
-      <h1 class="choice-name" id="choiceName">—</h1>
+      <h2 class="choice-name" id="choiceName">—</h2>
       <div class="choice-divider"></div>
       <p class="choice-sub">Выбирай, что больше по душе:</p>
       <div class="choice-cards">
@@ -231,7 +232,7 @@
   <!-- ══════════ Экран 5: задание ══════════ -->
   <section class="screen screen-reveal" id="screen-reveal">
     <div class="reveal-inner">
-      <h1 class="reveal-type" id="revealType">действие</h1>
+      <h2 class="reveal-type" id="revealType">действие</h2>
       <div class="reveal-divider"></div>
       <div class="secret-box hidden" id="secretBox">
         <p class="secret-title" id="secretTitle"></p>
@@ -245,12 +246,12 @@
         <button class="hint-close" id="hintCloseBtn">Свернуть</button>
       </div>
       <button class="hint-btn hidden" id="hintBtn" aria-label="Пояснение">?</button>
-      <button class="task-timer hidden" id="taskTimerBtn" aria-label="Таймер задания"></button>
+      <button class="task-timer hidden" id="taskTimerBtn" aria-live="polite"></button>
     </div>
     <div class="bottom-panel hidden" id="taskPanel">
       <button class="secret-hide hidden" id="secretHideBtn">Скрыть задание от игроков</button>
       <div class="panel-top">
-        <p class="punish-note" id="punishNote">Не выполнил — <b>пей стопку</b><br>и остаёшься в колесе</p>
+        <p class="punish-note" id="punishNote">Не выполнено — <b>штрафное задание</b><br>и остаёшься в колесе</p>
         <button class="panel-btn" id="ttsBtn" aria-label="Прочитать задание голосом">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4l5 1 11 5V4L8 9l-5 1z"/><path d="M19 9a4 4 0 0 1 0 6"/></svg>
         </button>
@@ -260,9 +261,10 @@
         </button>
       </div>
       <div class="action-row" id="actionRow">
-        <button class="act-btn ok" id="btnDone"><span>Выполнил</span></button>
-        <button class="act-btn no" id="btnFail"><span>Не выполнил</span></button>
+        <button class="act-btn ok" id="btnDone"><span>Выполнено</span></button>
+        <button class="act-btn no" id="btnFail"><span>Не выполнено</span></button>
       </div>
+      <button class="secret-hide" id="passBtn">Пас — пропустить ход без штрафа</button>
     </div>
   </section>
 
@@ -291,7 +293,7 @@
       </button>
       <div class="set-row punish-edit important">
         <label for="punishInput">Наказание за провал</label>
-        <input id="punishInput" maxlength="60" placeholder="пей стопку">
+        <input id="punishInput" maxlength="60" placeholder="штрафное задание">
       </div>
       <button class="set-row set-btn" id="setUnbanBtn">
         <span>Вернуть убранные задания</span>
@@ -331,8 +333,14 @@
     </div>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 </div>
+
+<noscript>
+  <p style="position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:#21265c;color:#fff;font-family:sans-serif;text-align:center;padding:20px">
+    Для игры нужен включённый JavaScript.
+  </p>
+</noscript>
 
 <script src="js/lang.js?v=1.3.1"></script>
 <script src="js/data.js?v=1.3.1"></script>

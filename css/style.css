@@ -91,6 +91,10 @@ body {
 }
 .hidden { display: none !important; }
 
+/* A11Y: видимый фокус для клавиатуры и скринридера */
+:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
+.player-row input:focus-visible { outline: 3px solid #ffd166; outline-offset: 0; }
+
 #app { position: fixed; inset: 0; }
 
 /* ═══════════ Главный экран ═══════════ */
@@ -112,7 +116,7 @@ body {
 .main-tag { font-size: 19px; font-weight: 700; line-height: 1.5; opacity: .95; margin-bottom: 18px; }
 .main-ver {
   position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); left: 0; right: 0;
-  text-align: center; font-size: 13px; font-weight: 600; opacity: .55; z-index: 2;
+  text-align: center; font-size: 13px; font-weight: 600; opacity: .78; z-index: 2;   /* A11Y: контраст ≥ 4.5:1 */
 }
 
 /* ═══════════ Шапка ═══════════ */
@@ -123,12 +127,6 @@ body {
   pointer-events: none;
 }
 .topbar button { pointer-events: auto; }
-.crown-btn {
-  width: 52px; height: 52px; border: none; border-radius: 14px;
-  background: var(--navy); color: var(--white); cursor: pointer;
-  display: grid; place-items: center; box-shadow: var(--shadow);
-}
-.crown-btn svg { width: 26px; height: 26px; }
 .dots-btn {
   width: 44px; height: 52px; border: none; background: transparent; color: var(--white);
   cursor: pointer; display: grid; place-items: center;
@@ -264,9 +262,12 @@ body {
 .dot-arrow:active { transform: scale(.9); }
 .dots { display: flex; justify-content: center; gap: 10px; }
 .dots .dot {
+  position: relative;
   width: 10px; height: 10px; border-radius: 50%; padding: 0; cursor: pointer;
   border: 1.5px solid rgba(255,255,255,.9); background: transparent; transition: background .25s;
 }
+/* A11Y: область нажатия точки ≥ 44×44 без изменения внешнего вида */
+.dots .dot::before { content: ''; position: absolute; inset: -17px; }
 .dots .dot.on { background: #fff; }
 
 /* ── Колесо ── */
@@ -492,7 +493,10 @@ body {
   backdrop-filter: blur(3px);
 }
 .modal-card {
-  width: min(480px, 100%); max-height: 86vh; overflow-y: auto;
+  width: min(480px, 100%);
+  max-height: 86vh;              /* запасной вариант для старых браузеров */
+  max-height: 86dvh;             /* LAYOUT-1: dvh не съедается адресной строкой */
+  overflow-y: auto;
   background: var(--navy-deep); border-radius: 26px 26px 0 0;
   padding: 26px 22px calc(env(safe-area-inset-bottom, 0px) + 22px);
   display: flex; flex-direction: column; gap: 12px;
@@ -787,4 +791,8 @@ button.set-btn b { opacity: .85; font-weight: 800; }
 @media (prefers-reduced-motion: reduce) {
   .spin-stripe.ps1, .spin-stripe.ps2, .spin-stripe.ps3 { animation: none; }
   .main-stripes i, .stripe { transition: none; }
+  .screen-wheel { transition: none; }              /* A11Y: уезд экрана колеса */
+  .spin-overlay { transition: none; }
+  .toast { animation: none; }
+  .carousel { scroll-behavior: auto; }
 }

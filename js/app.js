@@ -19,6 +19,8 @@
     '#37474f', '#ad1457', '#4527a0', '#00695c', '#8d6e63', '#b71c1c'
   ];
   const BLITZ_SECS = 180;   // блиц-круг: 3 минуты на круг
+  // UX-1: дефолтное наказание в одном месте — нейтральное, алкогольный вариант вводят сами
+  const DEFAULT_PUNISH = 'штрафное задание';
   // локальные токены: комнаты и предметы этого дома
   const ROOMS = ['кухня', 'балкон', 'душ на втором этаже', 'веранда', 'гостиная'];
   const OBJECTS = ['плед', 'лопатка для мангала', 'шампур', 'кубик льда', 'одеяло', 'бокал'];
@@ -53,7 +55,7 @@
     tts: store.get('tts', true),            // озвучка заданий диктором
     genders: store.get('genders', {}),      // имя → 'm' | 'f' | '' — только для окончаний
     chosen: store.get('chosen', {}),        // имя → { truth: [], action: [] } — уже выпадавшие игроку
-    punish: store.get('punish', 'пей стопку'),
+    punish: store.get('punish', DEFAULT_PUNISH),
     blacklist: store.get('blacklist', []),  // задания, исключённые компанией (сырые шаблоны)
     packs: store.get('packs', { kvartirnik: true, dacha: false, ny: false }), // включённые пакеты
     comboBan: store.get('comboBan', []),    // забаненные скелеты комбо «глагол|объект»
@@ -84,6 +86,7 @@
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
     if (!navFromPop) { try { history.pushState({ fant: id }, ''); } catch {} }
+    syncWakeLock();
   }
   const activeScreenId = () => document.querySelector('.screen.active')?.id || '';
   window.addEventListener('popstate', e => {
@@ -519,6 +522,11 @@
 
   function tryStartGame(levelId) {
     if (state.players.length < 2) { toast('Сначала добавьте игроков'); openPlayers(); return; }
+    // UX-2: Hot — 18+, одноразовое подтверждение при первом выборе
+    if (levelId === 'hot' && !store.get('hot18', false)) {
+      if (!confirm('Уровень Hot — 18+. Играем только по согласию всех. Продолжить?')) return;
+      store.set('hot18', true);
+    }
     state.level = levelId;
     store.set('level', levelId);
     app.dataset.level = levelId;
@@ -528,7 +536,7 @@
 
   /* ══════════ Экран 3: колесо ══════════ */
   $('#backToLevels').addEventListener('click', () => { showScreen('screen-levels'); buildPacksRow(); syncCarousel(); });
-  $('#statsWheelBtn').addEventListener('click', () => renderStats('Статистика'));
+  $('#statsWheelBtn').addEventListener('click', () => renderStats('Статистика фантов'));
   $('#blitzWheelBtn').addEventListener('click', () => {
     state.blitz = !state.blitz; store.set('blitz', state.blitz);
     renderHud();
@@ -785,9 +793,9 @@
     $('#actionLock').classList.toggle('hidden', !lockAction);
     // подсказка: выбрано 1 раз подряд — предупредить заранее
     $('#truthHint').textContent = (st && st.type === 'truth' && st.count === 1)
-      ? 'Правда уже выбрана раз подряд. Ещё раз — и в следующий раз её выбрать будет нельзя.' : '';
+      ? 'Правда уже выбрана 1 раз подряд. Ещё раз — и в следующий раз её выбрать будет нельзя.' : '';
     $('#actionHint').textContent = (st && st.type === 'action' && st.count === 1)
-      ? 'Действие уже выбрано раз подряд. Ещё раз — и в следующий раз его выбрать будет нельзя.' : '';
+      ? 'Действие уже выбрано 1 раз подряд. Ещё раз — и в следующий раз его выбрать будет нельзя.' : '';
 
     showScreen('screen-choice');
     // BAN-1: одноразовая подсказка про долгое нажатие — функция иначе не находится
@@ -838,6 +846,9 @@
     state.currentTask = raw;
     const isTruth = type === 'truth';
     $('#revealType').textContent = isTruth ? 'правда' : 'действие';
+    // UX-2: «Пас» доступен на Hot, не для секретных, один за ход
+    state.passUsed = false;
+    $('#passBtn').classList.toggle('hidden', state.level !== 'hot' || /\[\[тайно\]\]/.test(raw));
 
     // секретное задание: текст скрыт, отвечающий читает его один ([[тайно]])
     const secret = /\[\[тайно\]\]/.test(raw);
@@ -849,7 +860,7 @@
     tb.classList.remove('running', 'finished');
     if (secs > 0) {
       tb.dataset.secs = secs;
-      tb.textContent = 'Запустить таймер (' + fmtTime(secs) + ')';
+      setTimerBtnText(tb, 'Запустить таймер (' + fmtTime(secs) + ')');
       tb.classList.remove('hidden');
     } else {
       tb.dataset.secs = '';
@@ -879,7 +890,7 @@
     if (mod && !secret) plain = plain.replace(/\.?\s*$/, '') + '. Условие: ' + mod;
     $('#revealText').innerHTML = r.html;
     state.currentPlain = plain;
-    $('#punishNote').innerHTML = 'Не выполнил — <b>' + esc(state.punish) + '</b><br>и остаёшься в колесе';
+    $('#punishNote').innerHTML = 'Не выполнено — <b>' + esc(state.punish) + '</b><br>и остаёшься в колесе';
 
     const panel = $('#taskPanel');
     if (secret) {
@@ -950,7 +961,22 @@
   $('#btnDone').addEventListener('click', () => completeTask(true));
   $('#btnFail').addEventListener('click', () => completeTask(false));
 
+  /* ── UX-2: «Пас» на Hot — пропуск без штрафа, один за ход ── */
+  $('#passBtn').addEventListener('click', () => {
+    if (!pending || state.passUsed) return;
+    stopSpeak();
+    stopTaskTimer();
+    const name = pending.name;
+    pending = null;
+    state.passUsed = true;
+    toast(name + ' пропускает ход');
+    renderHud();
+    showScreen('screen-wheel');
+  });
+
   /* ── Внутренний таймер задания ── */
+  // A11Y: видимый текст таймера — и aria-label (статичный label его перекрывал)
+  const setTimerBtnText = (b, txt) => { b.textContent = txt; b.setAttribute('aria-label', 'Таймер задания: ' + txt); };
   // TIMER-1: таймер обязан глохнуть при любом завершении хода — beep не сработает на экране колеса
   function stopTaskTimer() {
     clearInterval(state.taskTimerId);
@@ -966,12 +992,12 @@
     clearInterval(state.taskTimerId);
     state.taskTimerId = setInterval(() => {
       const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
-      b.textContent = fmtTime(left);
+      setTimerBtnText(b, fmtTime(left));
       if (left <= 0) {
         clearInterval(state.taskTimerId);
         b.classList.remove('running');
         b.classList.add('finished');
-        b.textContent = 'Время!';
+        setTimerBtnText(b, 'Время!');
         beep(660, .15, 'triangle', .18);
         vibrate([120, 80, 120]);
       }
@@ -1246,7 +1272,7 @@
   };
   $('#phrasePunishInput').addEventListener('input', () => {
     const v = $('#phrasePunishInput').value.trim();
-    state.punish = v || 'пей стопку';
+    state.punish = v || DEFAULT_PUNISH;
     store.set('punish', state.punish);
     const pi = $('#punishInput'); if (pi) pi.value = state.punish;
   });
@@ -1277,15 +1303,21 @@
   /* доступность модалок: фокус входит внутрь и не покидает их (Tab по кругу),
      при закрытии возвращается на открывшую кнопку */
   let modalOpener = null;
+  // A11Y: пока модалка открыта, остальной интерфейс недоступен для скринридера и Tab
+  function setAppInert(on) {
+    document.querySelectorAll('.screen, .topbar').forEach(el => { if ('inert' in el) el.inert = on; });
+  }
   function openModal(sel) {
     modalOpener = document.activeElement;
     $(sel).classList.remove('hidden');
+    setAppInert(true);
     try { history.pushState({ fant: activeScreenId(), modal: sel.slice(1) }, ''); } catch {}
     const f = $(sel).querySelector('button:not(.hidden), input');
     if (f) f.focus();
   }
   function closeModal(sel) {
     $(sel).classList.add('hidden');
+    setAppInert(false);
     if (modalOpener && modalOpener.focus) modalOpener.focus();
     modalOpener = null;
   }
@@ -1318,7 +1350,7 @@
   });
   $('#punishInput').addEventListener('input', () => {
     const v = $('#punishInput').value.trim();
-    state.punish = v || 'пей стопку';
+    state.punish = v || DEFAULT_PUNISH;
     store.set('punish', state.punish);
   });
   $('#punishInput').addEventListener('blur', () => {
@@ -1340,7 +1372,7 @@
   });
   $('#setStatsBtn').addEventListener('click', () => {
     closeModal('#settingsModal');
-    renderStats('Статистика');
+    renderStats('Статистика фантов');
   });
   $('#setGamesBtn').addEventListener('click', () => {
     closeModal('#settingsModal');
@@ -1355,9 +1387,8 @@
     state.sound = !state.sound; store.set('sound', state.sound); syncSoundIcons();
   });
 
-  $('#crownBtn').addEventListener('click', () => toast('Премиум здесь не нужен — всё и так бесплатно'));
-
   /* ── Статистика ── */
+  // UX-1: названия статистики унифицированы: «Статистика фантов» / «Средние оценки»
   function renderStats(title, kind = 'fants') {
     $('#statsTitle').textContent = title;
     $('#statsModal').dataset.kind = kind;
@@ -1402,11 +1433,13 @@
     p.style.left = Math.max(10, Math.min(x - w / 2, window.innerWidth - w - 10)) + 'px';
     p.style.top = Math.max(60, Math.min(y - 30, window.innerHeight - h - 10)) + 'px';
     p.classList.remove('hidden');
+    setAppInert(true);
     try { history.pushState({ fant: activeScreenId(), modal: 'banPopup' }, ''); } catch {}
   }
   function hideBanPopup() {
     banOpen = false;
     $('#banPopup').classList.add('hidden');
+    setAppInert(false);
   }
   ['choiceTruth', 'choiceAction'].forEach(id => {
     const card = $('#' + id);
@@ -1460,6 +1493,22 @@
   document.addEventListener('pointerdown', e => {
     if (banOpen && !e.target.closest('#banPopup') && !e.target.closest('.choice-card')) hideBanPopup();
   }, true);
+
+  /* ── FEAT-1: экран не засыпает во время партии (Screen Wake Lock) ── */
+  let wakeLock = null;
+  const GAME_SCREENS = ['screen-wheel', 'screen-choice', 'screen-reveal', 'screen-phrase-round', 'screen-phrase-task', 'screen-phrase-results'];
+  async function keepAwake() {
+    try {
+      if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch {}
+  }
+  function syncWakeLock() {
+    if (GAME_SCREENS.includes(activeScreenId())) { if (!wakeLock) keepAwake(); }
+    else if (wakeLock) { try { wakeLock.release(); } catch {} wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncWakeLock(); });
 
   /* ── Старт: главный экран ── */
   buildCarousel();
