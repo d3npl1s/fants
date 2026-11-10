@@ -14,22 +14,19 @@ window.FANT = {
       id: 'fun',
       name: 'Fun',
       tagline: 'Задания, чтобы растопить лёд и начать вечеринку.',
-      icon: 'cloud',
-      timer: 45
+      icon: 'cloud'
     },
     {
       id: 'soft',
       name: 'Soft',
       tagline: 'Лёгкие задания: ровно столько, чтобы разогреть атмосферу.',
-      icon: 'wink',
-      timer: 60
+      icon: 'wink'
     },
     {
       id: 'hot',
       name: 'Hot',
       tagline: 'Становится жарко: смелые задания и удовольствие без стеснения.',
-      icon: 'hearts',
-      timer: 90
+      icon: 'hearts'
     }
   ],
 

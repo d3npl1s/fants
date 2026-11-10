@@ -5,7 +5,14 @@
   const $ = s => document.querySelector(s);
   const DATA = window.FANT;
   const { decline, guessGender, renderTemplate, speakSafe } = window.FANT_LANG;  // чистые функции из js/lang.js (тестируются на Node)
-  const NAME_H = 150;                       // высота имени в ленте, px
+  // SPIN-1: высоты строк лент берутся из CSS-переменных — JS и CSS больше не расходятся
+  const cssPx = (prop, fallback) => {
+    try {
+      const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(prop));
+      return isNaN(v) ? fallback : v;
+    } catch { return fallback; }
+  };
+  const nameH = () => cssPx('--spin-name-h', 150);   // высота имени в ленте колеса, px
   const SPIN_PAD = 8;                       // запас имён сверху и снизу ленты
   const PLAYER_COLORS = [
     '#21265c', '#c2185b', '#6a1fa2', '#0e7c86', '#d84315', '#2e7d32',
@@ -67,6 +74,8 @@
 
   const app = $('#app');
   app.dataset.level = state.level;
+  // STORE-1: повреждённые числа не дают NaN ни в степпере, ни в HUD
+  state.round = Math.max(1, Math.floor(Number(state.round) || 1));
 
   /* ── NAV-1: системная кнопка «Назад» ходит по экранам приложения ──
      каждый показ экрана кладёт запись в history; модалки/попапы — свои записи,
@@ -418,6 +427,11 @@
   function buildPacksRow() {
     const row = $('#packsRow');
     if (!row) return;
+    // LEVEL-1: на Hot пакеты всё равно игнорируются — вместо фиктивных чипов объясняем
+    if (state.level === 'hot') {
+      row.innerHTML = '<p class="packs-note">Hot — авторский уровень: пакеты в него не подмешиваются</p>';
+      return;
+    }
     let html = `<button type="button" class="pack-chip on base" data-pack="sea">У моря зимой</button>`;
     html += DATA.packs.map(p => {
       const on = !!state.packs[p.id];
@@ -461,14 +475,37 @@
     carousel.scrollTo({ left: i * carousel.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
     document.querySelectorAll('#carDots .dot').forEach(d => d.classList.toggle('on', d.dataset.lv === DATA.levels[i].id));
   }
-  carousel.addEventListener('scroll', () => {                         // точки следуют за свайпом
+  // LEVEL-1: свайп карусели меняет и уровень, и тему — по завершении скролла
+  let carScrollT = null;
+  function adoptCarouselLevel() {
     const i = Math.round(carousel.scrollLeft / Math.max(1, carousel.clientWidth));
-    document.querySelectorAll('#carDots .dot').forEach((d, k) => d.classList.toggle('on', k === i));
-  }, { passive: true });
+    const lv = DATA.levels[i];
+    if (lv && lv.id !== state.level) {
+      state.level = lv.id;
+      store.set('level', lv.id);
+      app.dataset.level = lv.id;
+      buildPacksRow();                 // Hot: строка пакетов не нужна
+    }
+  }
+  if ('onscrollend' in carousel) {
+    carousel.addEventListener('scrollend', adoptCarouselLevel);
+    carousel.addEventListener('scroll', () => {                        // точки следуют за свайпом
+      const i = Math.round(carousel.scrollLeft / Math.max(1, carousel.clientWidth));
+      document.querySelectorAll('#carDots .dot').forEach((d, k) => d.classList.toggle('on', k === i));
+    }, { passive: true });
+  } else {
+    carousel.addEventListener('scroll', () => {                        // точки следуют за свайпом
+      const i = Math.round(carousel.scrollLeft / Math.max(1, carousel.clientWidth));
+      document.querySelectorAll('#carDots .dot').forEach((d, k) => d.classList.toggle('on', k === i));
+      clearTimeout(carScrollT);
+      carScrollT = setTimeout(adoptCarouselLevel, 150);
+    }, { passive: true });
+  }
   $('#carDots').addEventListener('click', e => {
     const d = e.target.closest('[data-lv]'); if (!d) return;
     state.level = d.dataset.lv; store.set('level', state.level);
     app.dataset.level = state.level;
+    buildPacksRow();
     syncCarousel();
   });
   $('#prevLv').addEventListener('click', () => carousel.scrollBy({ left: -carousel.clientWidth, behavior: 'smooth' }));
@@ -490,7 +527,7 @@
   }
 
   /* ══════════ Экран 3: колесо ══════════ */
-  $('#backToLevels').addEventListener('click', () => { showScreen('screen-levels'); syncCarousel(); });
+  $('#backToLevels').addEventListener('click', () => { showScreen('screen-levels'); buildPacksRow(); syncCarousel(); });
   $('#statsWheelBtn').addEventListener('click', () => renderStats('Статистика'));
   $('#blitzWheelBtn').addEventListener('click', () => {
     state.blitz = !state.blitz; store.set('blitz', state.blitz);
@@ -499,13 +536,16 @@
     else { clearInterval(state.blitzTimerId); toast('Блиц выключен'); }
   });
   $('#mainStartBtn').addEventListener('click', () => openPlayers());
-  $('#spinBtn').addEventListener('click', spin);
+  // SPIN-1: MouseEvent не должен попадать в opts — spin() вызывается без аргументов
+  $('#spinBtn').addEventListener('click', () => spin());
 
   // свайп в любом месте экрана запускает колесо — как продолжение жеста (палец или мышь)
   let swipeStart = null;
   const wheelScreen = $('#screen-wheel');
   wheelScreen.addEventListener('pointerdown', e => {
     if (!e.isPrimary) return;
+    // SPIN-1: жест, начатый на кнопке (назад/статистика/блиц), колесо не запускает
+    if (e.target.closest('button')) { swipeStart = null; return; }
     swipeStart = { x: e.clientX, y: e.clientY, t: performance.now() };
   });
   wheelScreen.addEventListener('pointerup', e => {
@@ -592,6 +632,8 @@
   function markChosen(name, type, text) {
     if (!state.chosen[name]) state.chosen[name] = { truth: [], action: [] };
     if (!state.chosen[name][type].includes(text)) state.chosen[name][type].push(text);
+    // STORE-1: chosen не разрастается бесконечно — старейшие забываются
+    if (state.chosen[name][type].length > 80) state.chosen[name][type].splice(0, state.chosen[name][type].length - 80);
     store.set('chosen', state.chosen);
   }
 
@@ -640,6 +682,7 @@
     overlay.classList.add('show');
 
     // имя i по центру: translate(-50%, (total/2 - i - 0.5) * H)
+    const NAME_H = nameH();
     const offset = i => (total / 2 - i - .5) * NAME_H;
     track.style.transition = 'none';
     track.style.transform = `translate(-50%, calc(-50% + ${offset(startIdx)}px))`;
@@ -976,13 +1019,15 @@
   });
 
   /* ══════════ Игра «Продолжи фразу» ══════════ */
-  const PHRASE_H_DEFAULT = 104;             // высота имени в столбике, px (дублюруется в CSS)
+  const PHRASE_H_DEFAULT = () => cssPx('--pair-item-h', 104);  // высота имени в столбике, px (источник — CSS)
   const phrase = {
     per: store.get('phPer', 5),
     mode: store.get('phMode', 'all'),
     bag: [], queue: [], picks: 0, qInPair: 0,
-    scores: {}, current: null
+    scores: {}, current: null,
+    pairTimer: null
   };
+  phrase.per = Math.min(10, Math.max(1, Math.floor(Number(phrase.per) || 5)));   // STORE-1
   // накопительные средние оценки по игрокам: { имя: { sum, count } }
   let phStats = store.get('phStats', {});
 
@@ -1072,7 +1117,7 @@
         it.querySelector('span').style.fontSize = sizes[nm] + 'px';
       });
       // высота строки — из фактического DOM, чтобы JS и CSS не разошлись
-      const H = track.children[0]?.offsetHeight || PHRASE_H_DEFAULT;
+      const H = track.children[0]?.offsetHeight || PHRASE_H_DEFAULT();
       track.style.transition = 'none';
       track.style.transform = 'translateY(0)';
       void track.offsetWidth;

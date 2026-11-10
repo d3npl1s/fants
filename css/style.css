@@ -59,6 +59,9 @@
   --navy-deep: #1a1e4b;
   --white: #ffffff;
   --shadow: 0 6px 18px rgba(0, 0, 0, .28);
+  /* SPIN-1: высоты строк лент в одном месте — JS читает эти же переменные */
+  --spin-name-h: 150px;
+  --pair-item-h: 104px;
   /* палитры уровней */
   --c1: #56b7e8; --c2: #1c6fc0;
   --s1: #35c3f0; --s2: #ee127b; --s3: #1c6fc0;
@@ -211,6 +214,12 @@ body {
   background: var(--white); color: var(--navy); border-color: var(--white);
 }
 .packs-row .pack-chip.base { border-style: dashed; cursor: default; opacity: .8; }
+/* LEVEL-1: пояснение вместо чипов на Hot */
+.packs-row .packs-note {
+  grid-column: 1 / -1; margin: 0;
+  font-size: 13px; font-weight: 700; color: rgba(255,255,255,.9);
+  background: rgba(33,38,92,.6); border-radius: 14px; padding: 10px 14px;
+}
 /* у каждой карточки своя палитра — фон меняется при свайпе */
 .level-card[data-lv="fun"]  { --c1: #56b7e8; --c2: #1c6fc0; --l-accent: #2b7bc9; }
 .level-card[data-lv="soft"] { --c1: #ff5a45; --c2: #ffc53d; --l-accent: #ff7a3d; }
@@ -462,7 +471,7 @@ body {
   transform-origin: 50% 50%; will-change: transform;
   display: flex; flex-direction: column; align-items: center;
 }
-.spin-name { height: 150px; flex: 0 0 150px; width: 100%; display: grid; place-items: center; }
+.spin-name { height: var(--spin-name-h); flex: 0 0 var(--spin-name-h); width: 100%; display: grid; place-items: center; }
 .spin-name span {
   display: inline-block; padding: 20px 58px; min-width: 200px; text-align: center;
   font-size: 46px; font-weight: 800; letter-spacing: 2px;
@@ -608,7 +617,7 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   border: 3px solid rgba(255,255,255,.3);
 }
 .pair-track { position: absolute; left: 0; right: 0; top: 0; will-change: transform; display: flex; flex-direction: column; }
-.pair-item { height: 104px; flex: 0 0 104px; display: grid; place-items: center; font-size: 27px; font-weight: 800; color: #fff; text-align: center; padding: 0 10px; white-space: nowrap; }
+.pair-item { height: var(--pair-item-h); flex: 0 0 var(--pair-item-h); display: grid; place-items: center; font-size: 27px; font-weight: 800; color: #fff; text-align: center; padding: 0 10px; white-space: nowrap; }
 .pair-item.win-reader, .pair-item.win-reader span { background: #ffd166 !important; color: var(--navy) !important; }
 .pair-item.win-answer, .pair-item.win-answer span { background: #35d0aa !important; color: var(--navy) !important; }
 /* кнопка пары — обычный ребёнок кластера: position/transform колеса тут не нужны,
