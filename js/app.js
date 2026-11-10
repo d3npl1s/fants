@@ -1189,7 +1189,7 @@
       phrase.bag = shuffle(cats.flatMap(c => window.PHRASE.prompts[c]).filter(t => !state.blacklist.includes(t)));
     }
     let t = phrase.bag.pop();
-    if (!t) {   // мешок пуст, а все фразы забанены — повторяем из нес забаненных, в крайнем случае из любых
+    if (!t) {   // мешок пуст, а все фразы забанены — повторяем из незабаненных, в крайнем случае из любых
       const ok = window.PHRASE.prompts.friendly.filter(x => !state.blacklist.includes(x));
       t = ok[Math.floor(Math.random() * ok.length)] || window.PHRASE.prompts.friendly[0];
     }
