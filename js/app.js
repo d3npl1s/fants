@@ -626,6 +626,7 @@
       if (!pool.length) pool = [...DATA.tasks[level][type]];
       state.bags[bagKey] = shuffle(pool);
       text = pool[Math.floor(Math.random() * pool.length)];
+      toast('Новые задания закончились, повторяем');   // DATA-2: молчаливые повторы выглядят как баг
     } else {
       skipped.forEach(t => state.bags[bagKey].unshift(t));
     }
@@ -758,7 +759,8 @@
   function pickActionMod(taskText) {
     const o = taskText.match(/\[\[мод:([^\]]+)\]\]/);
     if (o) return o[1].trim();
-    if (/\[\[таймер/.test(taskText) || /\[\[тайно\]\]/.test(taskText) || /\[\[мод:/.test(taskText)) return null;
+    // DATA-3: [[без-мод]] и таймерные/секретные задания модификатор не получают
+    if (/\[\[таймер/.test(taskText) || /\[\[тайно\]\]/.test(taskText) || /\[\[мод:/.test(taskText) || /\[\[без-мод\]\]/.test(taskText)) return null;
     return Math.random() < .5 ? MODS[Math.floor(Math.random() * MODS.length)] : null;
   }
 
