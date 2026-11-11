@@ -92,6 +92,15 @@
      «Назад» закрывает их первым; popstate возвращает на предыдущий экран */
   let navFromPop = false;   // показ экрана из popstate не кладёт новую запись
   function showScreen(id) {
+    // SPIN-2: уход с экрана колеса посреди прокрутки гасит анимацию/RAF/щелчки целиком
+    if (id !== 'screen-wheel' && (state.spinAnim || state.spinRaf)) {
+      state.spinToken = (state.spinToken || 0) + 1;
+      cancelSpin();
+      $('#spinOverlay').classList.add('hidden');
+      $('#spinOverlay').classList.remove('show');
+      $('#screen-wheel').classList.remove('leaving');
+      state.spinning = false;
+    }
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
     if (!navFromPop) { try { history.pushState({ fant: id }, ''); } catch {} }
     syncWakeLock();
@@ -240,6 +249,8 @@
     stopTaskTimer();                      // TIMER-1
     hideBanPopup();                       // BLITZ-1: banOpen не должен навсегда блокировать choose()
     state.spinToken = (state.spinToken || 0) + 1;   // отменяем анимацию колеса, если она шла
+    cancelSpin();                                    // SPIN-2: гасим WAAPI/RAF и отложенные щелчки
+    state.spinning = false;
     // блиц — механика фантов: в других играх просто перезапускаем отсчёт
     const act = document.querySelector('.screen.active')?.id;
     if (act !== 'screen-wheel' && act !== 'screen-reveal' && act !== 'screen-choice') {
@@ -535,11 +546,6 @@
 
   function tryStartGame(levelId) {
     if (state.players.length < 2) { toast('Сначала добавьте игроков'); openPlayers(); return; }
-    // UX-2: Hot — 18+, одноразовое подтверждение при первом выборе
-    if (levelId === 'hot' && !store.get('hot18', false)) {
-      if (!confirm('Уровень Hot — 18+. Играем только по согласию всех. Продолжить?')) return;
-      store.set('hot18', true);
-    }
     state.level = levelId;
     store.set('level', levelId);
     app.dataset.level = levelId;
@@ -659,11 +665,62 @@
     store.set('chosen', state.chosen);
   }
 
+  /* ── SPIN-2: анимация колеса ──
+     Ведущий путь — Web Animations API (track.animate): нативный API браузера,
+     без библиотек/CDN/сети — работает офлайн так же, как CSS-анимации. JS не
+     пишет style.transform каждый кадр. Fallback — requestAnimationFrame от
+     timestamp кадра (синхронизирован с repaint; setInterval не используется).
+     Любая отмена (блиц, уход с экрана, новый запуск) гасит анимацию, RAF и
+     запланированные щелчки — двойной finishSpin невозможен. */
+  function dropSpinAnim() {   // снять залившуюся анимацию (fill: forwards держит финал)
+    if (state.spinAnim) { try { state.spinAnim.cancel(); } catch {} state.spinAnim = null; }
+  }
+  function cancelSpin() {     // полный аборт: анимация + RAF + отложенные щелчки
+    dropSpinAnim();
+    if (state.spinRaf) { cancelAnimationFrame(state.spinRaf); state.spinRaf = null; }
+    clearSpinTicks();
+  }
+  function clearSpinTicks() {
+    (state.spinTicks || []).forEach(clearTimeout);
+    state.spinTicks = null;
+  }
+  // момент пересечения границы имени (доля пути p) на кривой cubic-bezier:
+  // решаем x(u)=p Ньютоном и берём y(u) — тот же масштаб времени, что у браузера
+  function bezierTime(x1, y1, x2, y2, p) {
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const xf = u => ((ax * u + bx) * u + cx) * u;
+    const yf = u => ((ay * u + by) * u + cy) * u;
+    let u = p;
+    for (let i = 0; i < 8; i++) {
+      const dx = (3 * ax * u + 2 * bx) * u + cx;
+      if (Math.abs(dx) < 1e-6) break;
+      const diff = xf(u) - p;
+      if (Math.abs(diff) < 1e-5) break;
+      u -= diff / dx;
+    }
+    return Math.min(1, Math.max(0, yf(u)));
+  }
+  // расписание щелчков: по границе на каждое пройденное имя; тики ближе 40 мс
+  // сливаются — прежний троттлинг «не чаще 25 раз в секунду» без джанка
+  function scheduleTicks(easeArr, dur, crossings) {
+    const times = [];
+    if (state.sound && crossings > 0) {
+      for (let k = 1; k <= crossings; k++) {
+        const t = bezierTime(easeArr[0], easeArr[1], easeArr[2], easeArr[3], k / crossings) * dur;
+        if (times.length && t - times[times.length - 1] < 40) continue;
+        times.push(t);
+      }
+    }
+    state.spinTicks = times.map(ms => setTimeout(tickSound, ms));
+  }
+
   function spin(opts = {}) {
     if (state.spinning || state.players.length < 2) return;
     state.spinning = true;
     state.spinToken = (state.spinToken || 0) + 1;   // блиц может сбросить круг прямо во время анимации
     const token = state.spinToken;
+    dropSpinAnim();   // SPIN-2: fill:forwards прошлой прокрутки не должен держать ленту на месте
     vibrate(30);
 
     // экран колеса плавно уезжает — имена подъезжают следом
@@ -709,38 +766,77 @@
 
     const from = offset(startIdx), to = offset(endIdx);
     const dist = to - from;
-    let dur, ease;
-    if (opts.swipe) {                     // свайп: лента сразу летит, как продолжение жеста
+    let dur, easeArr, ease;               // easeArr — контрольные точки cubic-bezier для WAAPI
+    if (opts.swipe) {                     // свайп: лента сразу летит, как продолжение жеста (easeOutCubic)
+      easeArr = [0.215, 0.61, 0.355, 1];
       ease = t => 1 - Math.pow(1 - t, 3);
       dur = Math.min(5500, Math.max(1500, 3 * Math.abs(dist) / (opts.v || 3)));
-    } else {                              // тап: разгон с места, коротко
+    } else {                              // тап: разгон с места, коротко (easeInOutQuart)
+      easeArr = [0.77, 0, 0.175, 1];
       ease = t => t < .5 ? 8 * t * t * t * t : 1 - 8 * Math.pow(1 - t, 4);
       dur = 1200 + Math.random() * 200;
     }
+
+    // SPIN-2: prefers-reduced-motion — мгновенный честный переход к победителю
+    let reduced = false;
+    try { reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch {}
+    if (reduced) {
+      track.style.transform = `translate(-50%, calc(-50% + ${to}px))`;
+      state.spinTicks = [];
+      setTimeout(() => { if (token === state.spinToken) finishSpin(endIdx, rem[chosenIdx], token); }, 250);
+      return;
+    }
+
+    // SPIN-2: основной путь — нативная анимация, браузер двигает transform сам
+    if (typeof track.animate === 'function' && track.animate.length >= 1) {
+      let anim = null;
+      try {
+        anim = track.animate(
+          [{ transform: `translate(-50%, calc(-50% + ${from}px))` }, { transform: `translate(-50%, calc(-50% + ${to}px))` }],
+          { duration: dur, easing: `cubic-bezier(${easeArr[0]}, ${easeArr[1]}, ${easeArr[2]}, ${easeArr[3]})`, fill: 'forwards' }
+        );
+      } catch {}
+      // anim.finished обязан быть промисом: без него — обычный rAF-путь
+      if (anim && anim.finished && typeof anim.finished.then === 'function') {
+        state.spinAnim = anim;   // fill: forwards держит победителя до следующего запуска
+        scheduleTicks(easeArr, dur, Math.abs(endIdx - startIdx));
+        anim.finished.then(() => {
+          if (token !== state.spinToken) return;   // отменено — cancelSpin уже всё прибрал
+          clearSpinTicks();
+          finishSpin(endIdx, rem[chosenIdx], token);
+        }).catch(() => {});                        // anim.cancel() штатно отклоняет promise
+        return;
+      }
+      if (anim) { try { anim.cancel(); } catch {} }
+    }
+
+    // SPIN-2 fallback: requestAnimationFrame от timestamp кадра
     const t0 = performance.now();
     let lastIdx = -1, lastTickAt = 0;
-
-    // setInterval вместо rAF: не замирает в свёрнутых вкладках и webview
-    const iv = setInterval(() => frame(performance.now()), 16);
-    function frame(now) {
+    const frame = now => {
+      if (token !== state.spinToken || state.spinRaf === null) return;   // отменено
       const t = Math.min(1, (now - t0) / dur);
       const y = from + ease(t) * dist;
       const idx = Math.floor(total / 2 - y / NAME_H);
       if (idx !== lastIdx) {
         lastIdx = idx;
-        // троттлинг тиков: новый осциллятор не чаще 25 раз в секунду — меньше джанка на свайпе
+        // троттлинг тиков: звук не чаще 25 раз в секунду — меньше джанка на свайпе
         if (now - lastTickAt > 40) { lastTickAt = now; tickSound(); }
       }
       track.style.transform = `translate(-50%, calc(-50% + ${y}px))`;
       if (t >= 1) {
-        clearInterval(iv);
+        state.spinRaf = null;
         finishSpin(endIdx, rem[chosenIdx], token);
+        return;
       }
-    }
+      state.spinRaf = requestAnimationFrame(frame);
+    };
+    state.spinRaf = requestAnimationFrame(frame);
   }
 
   function finishSpin(winIdx, winnerName, token) {
     if (token !== state.spinToken) {         // круг сброшен блицем во время анимации
+      cancelSpin();                           // SPIN-2: страховка — анимация/RAF/тики не переживут сброс
       $('#spinOverlay').classList.add('hidden');
       $('#screen-wheel').classList.remove('leaving');
       state.spinning = false;
@@ -858,9 +954,6 @@
     state.currentTask = raw;
     const isTruth = type === 'truth';
     $('#revealType').textContent = isTruth ? 'правда' : 'действие';
-    // UX-2: «Пас» доступен на Hot, не для секретных, один за ход
-    state.passUsed = false;
-    $('#passBtn').classList.toggle('hidden', state.level !== 'hot' || /\[\[тайно\]\]/.test(raw));
 
     // секретное задание: текст скрыт, отвечающий читает его один ([[тайно]])
     const secret = /\[\[тайно\]\]/.test(raw);
@@ -972,19 +1065,6 @@
 
   $('#btnDone').addEventListener('click', () => completeTask(true));
   $('#btnFail').addEventListener('click', () => completeTask(false));
-
-  /* ── UX-2: «Пас» на Hot — пропуск без штрафа, один за ход ── */
-  $('#passBtn').addEventListener('click', () => {
-    if (!pending || state.passUsed) return;
-    stopSpeak();
-    stopTaskTimer();
-    const name = pending.name;
-    pending = null;
-    state.passUsed = true;
-    toast(name + ' пропускает ход');
-    renderHud();
-    showScreen('screen-wheel');
-  });
 
   /* ── Внутренний таймер задания ── */
   // A11Y: видимый текст таймера — и aria-label (статичный label его перекрывал)

@@ -138,4 +138,5 @@ SW для страницы — network-first: после обновления к
 
 Чистые HTML/CSS/JS без сборки. Шрифт Montserrat встроен. Звук —
 WebAudio, вибрация — Vibration API, озвучка заданий — системный
-речевой синтез.
+речевой синтез. Прокрутка колеса — Web Animations API (нативный,
+работает офлайн), при отсутствии — requestAnimationFrame.
