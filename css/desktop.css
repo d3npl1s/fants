@@ -1,0 +1,392 @@
+/* ═══════════════ Фанты — desktop/tablet ═══════════════ */
+/* Все правила — ТОЛЬКО внутри media queries: мобильный вид (<768px) не трогается.
+   Подключение: <link rel="stylesheet" href="css/desktop.css"> ПОСЛЕ css/style.css.
+   Карта селекторов и инструкции интегратора — docs/desktop-ui-notes.md.
+   Карусели игр/уровней остаются слайдами на всю ширину (синхронизация точек и
+   scrollBy в app.js считает шаг = clientWidth карусели), контент внутри — в
+   компактной центральной колонке. */
+
+/* ─────────── Планшет и маленький ноутбук: 768–1023px ─────────── */
+@media (min-width: 768px) {
+
+  /* центральная рабочая колонка для форм-экранов */
+  #screen-players.active > .setup-title,
+  #screen-players.active > .setup-sub,
+  #screen-players.active > .player-list,
+  #screen-players.active > .ghost-btn,
+  #screen-players.active > .setup-actions {
+    width: 100%; max-width: 660px; margin-left: auto; margin-right: auto;
+  }
+  .phrase-setup-inner { max-width: 660px; margin-left: auto; margin-right: auto; }
+
+  /* чипы пакетов: по центру, не на всю ширину монитора */
+  .packs-row {
+    left: 50%; right: auto; transform: translateX(-50%);
+    width: min(720px, calc(100% - 48px));
+  }
+
+  .setup-title { font-size: 46px; }
+  .game-tag { max-width: 400px; }
+  .level-tag { max-width: 420px; }
+  .reveal-text { font-size: 25px; max-width: 620px; }
+  .choice-cards { max-width: 760px; }
+  .dm-cards { max-width: 560px; }
+}
+
+/* ─────────── Desktop: от 1024px ─────────── */
+@media (min-width: 1024px) {
+
+  /* ═══ Главный экран ═══ */
+  .main-inner { gap: 26px; }
+  .main-crown { width: 150px; height: 150px; }
+  .main-inner h1 { font-size: 76px; }
+  .main-tag { font-size: 21px; margin-bottom: 22px; }
+
+  /* ═══ Игроки: 2 колонки, поле имени не сжимается ═══ */
+  #screen-players.active { padding-top: calc(env(safe-area-inset-top, 0px) + 96px); }
+  #screen-players.active > .setup-title,
+  #screen-players.active > .setup-sub,
+  #screen-players.active > .player-list,
+  #screen-players.active > .ghost-btn,
+  #screen-players.active > .setup-actions {
+    max-width: 1080px;
+  }
+  .setup-title { font-size: 48px; }
+  .player-list {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px;
+  }
+  .setup-actions { padding-top: 28px; }
+
+  /* ═══ Выбор игры / уровней: слайд на весь экран, контент по центру ═══ */
+  .game-card, .level-card { justify-content: center; gap: 24px; }
+  .game-card { padding-top: calc(env(safe-area-inset-top, 0px) + 72px); }
+  .game-icon { width: 140px; height: 140px; }
+  .game-name { font-size: 52px; }
+  .game-tag { max-width: 460px; font-size: 19px; }
+  .game-card .play-btn { max-width: 340px; }
+  .level-icon { width: 160px; height: 160px; }
+  .level-name { font-size: 60px; }
+  .level-tag { max-width: 480px; font-size: 20px; }
+  .level-card .play-btn { max-width: 360px; }
+  .packs-row { width: min(1160px, calc(100% - 48px)); }
+  .packs-row .pack-chip { font-size: 14px; padding: 9px 12px; }
+  .packs-row .packs-note { font-size: 14px; }
+  .dots-row { bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); padding: 10px 22px; }
+  .dot-arrow { width: 50px; height: 50px; }
+
+  /* ═══ Колесо ═══ */
+  .wheel-hud { top: calc(env(safe-area-inset-top, 0px) + 88px); padding: 11px 24px; }
+  .wheel-hud b { font-size: 18px; }
+  .wheel-hud span { font-size: 16px; }
+  .wheel-caption { top: 67%; font-size: 30px; }
+
+  /* ═══ Правда или действие ═══ */
+  .choice-inner {
+    padding: calc(env(safe-area-inset-top, 0px) + 76px) 40px calc(env(safe-area-inset-bottom, 0px) + 24px);
+    gap: 16px;
+    justify-content: center;   /* на больших экранах блок по центру высоты */
+  }
+  .choice-name { font-size: 64px; }
+  .choice-divider { width: 160px; }
+  .choice-sub { font-size: 20px; }
+  .choice-cards { max-width: 900px; gap: 20px; }
+  .choice-card { padding: 24px 26px; border-radius: 24px; }
+  .cc-text { font-size: 19px; }
+
+  /* ═══ Задание (фанты и фразы) ═══ */
+  .reveal-inner {
+    padding: calc(env(safe-area-inset-top, 0px) + 64px) 40px 10px;
+    gap: 26px;
+  }
+  .reveal-type { font-size: 62px; }
+  .reveal-text { font-size: 27px; max-width: 680px; }   /* строка ≈ 55–75 символов */
+  .screen-phrase-task .reveal-text { font-size: 30px; max-width: 740px; }
+  .mod-plate { font-size: 19px; }
+  .task-timer { font-size: 17px; }
+  .hint-btn { width: 50px; height: 50px; font-size: 24px; }
+  .hint-box { max-width: 560px; }
+  .hint-text { font-size: 16px; }
+  .secret-box { max-width: 480px; }
+  .secret-title { font-size: 26px; }
+  .done-btn { font-size: 20px; }
+  .act-btn span { padding: 16px 34px; font-size: 18px; }
+
+  /* нижняя панель задания: контент по центру, полоса — на всю ширину */
+  .bottom-panel { padding: 16px 32px calc(env(safe-area-inset-bottom, 0px) + 20px); }
+  .bottom-panel .panel-top { max-width: 820px; margin-left: auto; margin-right: auto; width: 100%; }
+  .bottom-panel .action-row { max-width: 680px; margin-left: auto; margin-right: auto; width: 100%; }
+  .bottom-panel .done-btn.wide { max-width: 520px; margin-left: auto; margin-right: auto; }
+  .bottom-panel .secret-hide { align-self: center; font-size: 15px; }
+  .punish-note { font-size: 16px; }
+  .rate-panel { max-width: 620px; margin-left: auto; margin-right: auto; width: 100%; }
+  .rate-btn { max-width: 72px; }
+  .rate-row { gap: 14px; }
+
+  /* ═══ Продолжи фразу: настройки и итоги ═══ */
+  .phrase-setup-inner { max-width: 680px; }
+  #modeChips { grid-template-columns: repeat(4, 1fr); }   /* короткие подписи — в один ряд */
+
+  /* тонкий скроллбар во всех скролл-контейнерах на desktop */
+  #screen-players.active,
+  .phrase-setup-inner,
+  .dm-listen-inner,
+  .dm-checks-inner,
+  .dm-check-inner,
+  .modal-card {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .32) transparent;
+  }
+  #screen-players.active::-webkit-scrollbar,
+  .phrase-setup-inner::-webkit-scrollbar,
+  .dm-listen-inner::-webkit-scrollbar,
+  .dm-checks-inner::-webkit-scrollbar,
+  .dm-check-inner::-webkit-scrollbar,
+  .modal-card::-webkit-scrollbar { width: 8px; }
+  #screen-players.active::-webkit-scrollbar-thumb,
+  .phrase-setup-inner::-webkit-scrollbar-thumb,
+  .dm-listen-inner::-webkit-scrollbar-thumb,
+  .dm-checks-inner::-webkit-scrollbar-thumb,
+  .dm-check-inner::-webkit-scrollbar-thumb,
+  .modal-card::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .32); border-radius: 4px; }
+  #screen-players.active::-webkit-scrollbar-track,
+  .phrase-setup-inner::-webkit-scrollbar-track,
+  .dm-listen-inner::-webkit-scrollbar-track,
+  .dm-checks-inner::-webkit-scrollbar-track,
+  .dm-check-inner::-webkit-scrollbar-track,
+  .modal-card::-webkit-scrollbar-track { background: transparent; }
+  .ph-field { margin-bottom: 26px; }
+  .ph-punish-input { height: 58px; }
+  .ph-results { max-width: 680px; margin-left: auto; margin-right: auto; width: 100%; }
+  .ph-result-row { padding: 16px 18px; }
+  .ph-loser { text-align: center; }
+
+  /* ═══ Продолжи фразу: пара читает/отвечает ═══ */
+  .phrase-round-inner {
+    padding: calc(env(safe-area-inset-top, 0px) + 80px) 40px calc(env(safe-area-inset-bottom, 0px) + 26px);
+  }
+  .ph-progress { font-size: 16px; padding: 10px 24px; }
+  .pair-cols { gap: 56px; margin-top: auto; margin-bottom: auto; }   /* по центру между шапкой и управлением */
+  .pair-win { width: 230px; }
+  :root { --pair-item-h: 112px; }   /* JS читает эту же переменную — математика ленты сходится */
+  .pair-item { font-size: 30px; }
+  .pair-role { font-size: 16px; }
+  .ph-controls { left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 30px); }
+  .pair-caption { max-width: 720px; margin-left: auto; margin-right: auto; font-size: 22px; }
+  #phraseGoBtn { max-width: 420px; font-size: 25px; }
+  #pairSpinBtn { width: 140px; height: 140px; }
+  #pairSpinBtn svg { width: 64px; height: 64px; }
+
+  /* ═══ Нарисуй по памяти: настройки — сетка 2 колонки ═══ */
+  #screen-dm-setup .phrase-setup-inner {
+    max-width: 1040px;
+    display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px;
+    align-content: start;
+  }
+  #screen-dm-setup .setup-title,
+  #screen-dm-setup .setup-sub,
+  #screen-dm-setup .dm-warn,
+  #screen-dm-setup .dm-total,
+  #screen-dm-setup .setup-actions { grid-column: 1 / -1; }
+  .dm-range { max-width: 480px; }
+  .dm-total { font-size: 17px; }
+  .dm-stepper { margin-top: 14px; }
+
+  /* ═══ Нарисуй по памяти: слушание и дорисовка ═══ */
+  .dm-listen-inner {
+    padding: calc(env(safe-area-inset-top, 0px) + 80px) 40px calc(env(safe-area-inset-bottom, 0px) + 26px);
+    gap: 22px;
+  }
+  .dm-big-num { font-size: 150px; min-height: 150px; }
+  .dm-note { font-size: 18px; max-width: 540px; }
+  .dm-listen-actions { max-width: 420px; }
+
+  /* ═══ Нарисуй по памяти: список проверок — 2 колонки ═══ */
+  .dm-checks-inner {
+    padding: calc(env(safe-area-inset-top, 0px) + 80px) 32px calc(env(safe-area-inset-bottom, 0px) + 26px);
+  }
+  .dm-cards {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px;
+    max-width: 1000px;
+  }
+  .dm-scores-line { max-width: 1000px; margin-left: auto; margin-right: auto; }
+  .dm-card { padding: 15px 18px; }
+  .dm-q-who { font-size: 17px; }
+
+  /* ═══ Нарисуй по памяти: одна проверка ═══ */
+  .dm-check-inner {
+    padding: calc(env(safe-area-inset-top, 0px) + 80px) 40px calc(env(safe-area-inset-bottom, 0px) + 26px);
+    gap: 18px;
+  }
+  .dm-nums { max-width: 640px; gap: 12px; grid-template-columns: repeat(6, 1fr); }
+  .dm-num { font-size: 26px; border-radius: 16px; }
+  .dm-question { font-size: 22px; max-width: 640px; }
+  .dm-reveal-box { max-width: 560px; padding: 18px 26px; }
+  .dm-reveal-word { font-size: 34px; }
+  .dm-result-line { font-size: 17px; }
+  .dm-check-actions { max-width: 560px; }
+  .dm-verdict { flex-direction: row; }
+  .dm-v-btn { flex: 1; }
+
+  /* итоги DM: история по ширине таблицы */
+  .dm-history { max-width: 680px; margin-left: auto; margin-right: auto; }
+
+  /* ═══ Модалки: центрированные окна вместо bottom sheet ═══ */
+  .modal {
+    align-items: center; justify-content: center; padding: 24px;
+  }
+  .modal-card {
+    width: min(560px, 92vw);
+    max-height: min(86dvh, 760px);
+    border-radius: 26px;
+    /* тонкий скроллбар вместо системного — не ломает скруглённую карточку */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .32) transparent;
+  }
+  .modal-card::-webkit-scrollbar { width: 8px; }
+  .modal-card::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .32); border-radius: 4px; }
+  .modal-card::-webkit-scrollbar-track { background: transparent; }
+  /* статистика: 2 колонки карточек игроков */
+  #statsTable { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+  #statsTable .stats-row { margin-bottom: 0; }
+  #statsTable .stats-kings { grid-column: 1 / -1; }
+
+  /* всплывашки */
+  .toast { font-size: 16px; max-width: 480px; bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
+  .ban-popup { width: 320px; }
+}
+
+/* ─────────── Широкие мониторы: от 1440px ─────────── */
+/* больше воздуха, но колонки не разъезжаются по краям */
+@media (min-width: 1440px) {
+  .main-crown { width: 170px; height: 170px; }
+  .main-inner h1 { font-size: 84px; }
+  .choice-cards { max-width: 980px; }
+  .game-tag { max-width: 480px; }
+  .level-tag { max-width: 520px; }
+  .phrase-setup-inner { max-width: 720px; }
+  .ph-results, .dm-history { max-width: 720px; }
+  .dm-cards { max-width: 1080px; }
+  .dm-nums { max-width: 700px; }
+  .packs-row { width: min(1240px, calc(100% - 64px)); }
+}
+
+/* ─────────── Низкие экраны (ноутбуки 720p): важное — в первом экране ─────────── */
+@media (min-width: 1024px) and (max-height: 760px) {
+  /* формы настроек компактнее, чтобы «Начать» попадал в первый экран */
+  #screen-players.active { padding-top: calc(env(safe-area-inset-top, 0px) + 72px); }
+  .phrase-setup-inner { padding-top: calc(env(safe-area-inset-top, 0px) + 64px); }
+  .setup-sub { margin: 8px 0 16px; }
+  .ph-field { margin-bottom: 14px; }
+  .ph-field > label { margin-bottom: 6px; }
+  .stepper button { width: 54px; height: 54px; }
+  .stepper b { font-size: 38px; min-width: 48px; }
+  .mode-chips button { padding: 10px 14px; }
+  .mode-chips { gap: 8px; }
+  .dm-listen-inner, #screen-dm-setup .phrase-setup-inner { padding-top: calc(env(safe-area-inset-top, 0px) + 64px); }
+  .dm-stepper { margin-top: 8px; }
+  .dm-range { height: 36px; }
+  .setup-actions { padding-top: 16px; }
+  .play-btn { height: 60px; }
+  .main-inner { gap: 14px; }
+  .main-crown { width: 110px; height: 110px; }
+  .main-inner h1 { font-size: 60px; }
+  .main-tag { font-size: 18px; margin-bottom: 12px; }
+  .game-card, .level-card { gap: 16px; padding-top: calc(env(safe-area-inset-top, 0px) + 64px); }
+  .game-icon { width: 110px; height: 110px; }
+  .level-icon { width: 120px; height: 120px; }
+  .game-name { font-size: 42px; }
+  .level-name { font-size: 48px; }
+  .game-tag, .level-tag { font-size: 17px; min-height: 64px; }
+  .choice-inner { padding-top: calc(env(safe-area-inset-top, 0px) + 56px); gap: 10px; }
+  .choice-name { font-size: 52px; }
+  .choice-card { padding: 18px 20px; }
+  .cc-text { font-size: 17px; }
+  .reveal-inner { padding-top: calc(env(safe-area-inset-top, 0px) + 48px); gap: 16px; }
+  .reveal-type { font-size: 52px; }
+  .reveal-text { font-size: 24px; }
+  .screen-phrase-task .reveal-text { font-size: 26px; }
+  .act-btn span { padding: 13px 28px; font-size: 17px; }
+  .phrase-round-inner { padding-top: calc(env(safe-area-inset-top, 0px) + 64px); }
+  .pair-cols { margin-top: 14px; gap: 44px; }
+  .pair-win { width: 200px; }
+  .ph-controls { bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); gap: 12px; }
+  .pair-caption { font-size: 20px; }
+  .dm-big-num { font-size: 110px; min-height: 110px; }
+  .dm-listen-inner { gap: 14px; }
+  .dm-check-inner { gap: 12px; }
+  .spin-big-btn { width: 150px; height: 150px; }
+  .spin-big-btn svg { width: 72px; height: 72px; }
+  .wheel-caption { top: 68%; }
+}
+
+/* ─────────── Hover — только как дополнительная обратная связь ─────────── */
+/* только устройства с настоящим курсором; touch не получает sticky-hover */
+@media (hover: hover) and (pointer: fine) {
+  .play-btn,
+  .dm-card,
+  .act-btn { transition: transform .16s ease; }
+  .choice-card { transition: transform .16s ease, opacity .25s; }   /* opacity нужна базе для .locked */
+  .play-btn:hover { transform: translateY(-2px); }
+  .choice-card:hover { transform: translateY(-3px); }
+  .dm-card:hover { transform: translateY(-1px); }
+  .act-btn:hover { transform: scale(1.02); }
+
+  .done-btn,
+  .dot-arrow,
+  .panel-btn,
+  .corner-back,
+  .corner-stats,
+  .corner-blitz,
+  .player-row .rm,
+  .player-row .gx,
+  .stepper button,
+  .hint-btn,
+  .rate-btn,
+  .dm-num:not(:disabled),
+  .dm-v-btn,
+  .modal-close,
+  .stats-reset,
+  .ban-row button,
+  .task-timer:not(.running) { transition: filter .16s ease; }
+  .done-btn:hover,
+  .dot-arrow:hover,
+  .panel-btn:hover,
+  .corner-back:hover,
+  .corner-stats:hover,
+  .corner-blitz:hover,
+  .player-row .rm:hover,
+  .player-row .gx:hover,
+  .stepper button:hover,
+  .hint-btn:hover,
+  .dm-v-btn:hover { filter: brightness(1.18); }
+  .rate-btn:hover:not(.sel),
+  .dm-num:not(:disabled):hover { filter: brightness(1.12); }
+  .modal-close:hover,
+  .stats-reset:hover,
+  .ban-row button:hover { filter: brightness(1.1); }
+  .task-timer:not(.running):hover { filter: brightness(1.15); }
+
+  .ghost-btn,
+  .pack-chip,
+  .mode-chips button { transition: filter .16s ease, background-color .16s ease; }
+  .ghost-btn:hover { background: rgba(255, 255, 255, .12); }
+  .pack-chip:not(.base):hover,
+  .mode-chips button:not(.on):hover { filter: brightness(1.25); }
+
+  .dots .dot { transition: background .16s ease; }
+  .dots .dot:not(.on):hover { background: rgba(255, 255, 255, .45); }
+
+  .secret-hide:hover,
+  .hint-close:hover { color: #fff; }
+}
+
+/* ─────────── Меньше движения: гасим только добавленные переходы ─────────── */
+@media (prefers-reduced-motion: reduce) {
+  .play-btn, .choice-card, .dm-card, .act-btn,
+  .done-btn, .dot-arrow, .panel-btn, .corner-back, .corner-stats, .corner-blitz,
+  .player-row .rm, .player-row .gx, .stepper button, .hint-btn,
+  .rate-btn, .dm-num, .dm-v-btn, .modal-close, .stats-reset, .ban-row button,
+  .task-timer, .ghost-btn, .pack-chip, .mode-chips button, .dots .dot {
+    transition: none;
+  }
+}
