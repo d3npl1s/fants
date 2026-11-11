@@ -104,6 +104,8 @@
     if (!$('#banPopup').classList.contains('hidden')) { hideBanPopup(); return; }
     const st = e.state || {};
     if (st.fant && st.fant !== activeScreenId()) {
+      // DM-1: уход с экранов режима системной кнопкой «Назад» глушит его голос и таймеры
+      if (!String(st.fant).startsWith('screen-dm-')) dmStopEngine();
       navFromPop = true;
       showScreen(st.fant);
       navFromPop = false;
@@ -393,11 +395,13 @@
   /* ══════════ Экран 2: выбор игры ══════════ */
   const GAME_ICONS = {
     fants: `<svg class="game-icon" viewBox="0 0 120 120"><rect x="30" y="16" width="60" height="60" rx="14" fill="#fff"/><path d="M44 52 40 26l14 10 6-14 6 14 14-10-4 26z" fill="none" stroke="#21265c" stroke-width="4" stroke-linejoin="round"/><path d="M44 52h32v6c0 5-4 9-9 9H53c-5 0-9-4-9-9z" fill="#21265c"/></svg>`,
-    phrase: `<svg class="game-icon" viewBox="0 0 120 120"><path fill="#fff" d="M18 24c0-6 5-11 11-11h62c6 0 11 5 11 11v40c0 6-5 11-11 11H56L38 94V75H29c-6 0-11-5-11-11z"/><circle cx="43" cy="44" r="5" fill="#26b5a2"/><circle cx="60" cy="44" r="5" fill="#26b5a2"/><circle cx="77" cy="44" r="5" fill="#26b5a2"/><path fill="#fff" opacity=".85" d="M50 96l14-12 18 8c4 2 6 7 4 11s-7 6-11 4z"/></svg>`
+    phrase: `<svg class="game-icon" viewBox="0 0 120 120"><path fill="#fff" d="M18 24c0-6 5-11 11-11h62c6 0 11 5 11 11v40c0 6-5 11-11 11H56L38 94V75H29c-6 0-11-5-11-11z"/><circle cx="43" cy="44" r="5" fill="#26b5a2"/><circle cx="60" cy="44" r="5" fill="#26b5a2"/><circle cx="77" cy="44" r="5" fill="#26b5a2"/><path fill="#fff" opacity=".85" d="M50 96l14-12 18 8c4 2 6 7 4 11s-7 6-11 4z"/></svg>`,
+    draw: `<svg class="game-icon" viewBox="0 0 120 120"><rect x="20" y="12" width="76" height="96" rx="10" fill="#fff"/><path d="M32 38h52M32 54h52M32 70h34" stroke="#c25a2a" stroke-width="6" stroke-linecap="round" fill="none" opacity=".4"/><path d="M99 28 59 84l-17 9 4-19 40-56z" fill="#ffd166" stroke="#21265c" stroke-width="4" stroke-linejoin="round"/><path d="M91 40 71 68" stroke="#21265c" stroke-width="4" stroke-linecap="round"/></svg>`
   };
   const GAMES = [
     { id: 'fants', name: 'Фанты', tagline: 'Правда или действие: колесо, уровни и задания.' },
-    { id: 'phrase', name: 'Продолжи фразу', tagline: 'Отвечай неправильно, но уверенно. Зал ставит оценку.' }
+    { id: 'phrase', name: 'Продолжи фразу', tagline: 'Отвечай неправильно, но уверенно. Зал ставит оценку.' },
+    { id: 'draw', name: 'Нарисуй по памяти', tagline: 'Услышь слова, зарисуй по памяти и угадай чужие рисунки.' }
   ];
   function buildGames() {
     $('#gamesTrack').innerHTML = GAMES.map(g => `
@@ -421,6 +425,7 @@
     if (!b) return;
     // настройки открываются только по кнопке-меню, не поверх каждой игры
     if (b.dataset.play === 'fants') { showScreen('screen-levels'); syncCarousel(); }
+    else if (b.dataset.play === 'draw') { dmEnter(); }
     else { renderModeChips(); showScreen('screen-phrase-setup'); }
   });
   $('#backToGames').addEventListener('click', () => showScreen('screen-games'));
@@ -1312,6 +1317,550 @@
     vibrate([60, 60, 140]);
   }
 
+  /* ══════════ Игра «Нарисуй по памяти» ══════════
+     Отдельный режим: слова слушаются голосом (TTS — сама суть игры, поэтому
+     глобальный выключатель «Озвучка заданий» здесь не применяется),
+     рисуются на бумаге, проверяются парами «задающий → отвечающий».
+     Чистая логика — в js/draw-memory-core.js, база — в js/draw-memory-data.js */
+  const DMD = window.DRAW_MEMORY_DATA;
+  const DMC = window.DRAW_MEMORY_CORE;
+  const DM_PER_PRESETS = [
+    { n: 2, label: 'Легко · 2' }, { n: 3, label: 'Нормально · 3' },
+    { n: 4, label: 'Сложно · 4' }, { n: 5, label: 'Очень сложно · 5' }
+  ];
+  const DM_PACE_PRESETS = [
+    { r: .7, label: 'Медленно' }, { r: 1, label: 'Обычно' }, { r: 1.3, label: 'Быстро' }
+  ];
+  const DM_DRAW_PRESETS = [15, 30, 45, 60, 0];
+  const dmNum = (v, d, lo, hi) => { v = Number(v); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+
+  const dm = {
+    settings: (() => {
+      const s = store.get('dmSettings', {});
+      return {
+        per: Math.round(dmNum(s.per, 3, 1, 10)),
+        rate: dmNum(s.rate, 1, .5, 1.5),
+        pause: dmNum(s.pause, 1, 0, 3),
+        drawSecs: Math.round(dmNum(s.drawSecs, 30, 0, 120))
+      };
+    })(),
+    recent: (() => {
+      const r = store.get('dmRecent', []);
+      return Array.isArray(r) ? r.filter(w => typeof w === 'string') : [];
+    })(),
+    round: null,          // активный раунд (объект из fant.dmRound)
+    checkIdx: null,       // открытая карточка проверки
+    seqToken: 0,          // гвардия TTS-цепочки и таймеров (DM-1)
+    tickId: null,         // интервал отсчёта/таймера дорисовки
+    running: false,       // идёт ли озвучка/отсчёт/таймер прямо сейчас
+    ttsOk: null,          // null — ещё проверяем
+    ttsIv: null
+  };
+  // раунд читается из хранилища с проверкой целостности: битая/чужая схема — выбрасывается
+  dm.round = (() => {
+    const r = store.get('dmRound', null);
+    if (!r || typeof r !== 'object' || r.v !== 1) return null;
+    if (!Array.isArray(r.words) || !Array.isArray(r.cards) || !Array.isArray(r.pairs) || !Array.isArray(r.players)) return null;
+    if (typeof r.total !== 'number' || r.words.length !== r.total || r.cards.length !== r.total || r.pairs.length !== r.total) return null;
+    if (['listen', 'draw', 'checks', 'done'].indexOf(r.phase) < 0) return null;
+    r.scores = r.scores && typeof r.scores === 'object' ? r.scores : DMC.newScores(r.players);
+    r.hist = Array.isArray(r.hist) ? r.hist : [];
+    r.listenIdx = Math.min(Math.max(0, Math.floor(dmNum(r.listenIdx, 0, 0, r.total))), r.total);
+    r.drawLeft = Math.max(0, Math.floor(dmNum(r.drawLeft, 0, 0, 7200)));
+    return r;
+  })();
+  const dmSave = () => { if (dm.round) store.set('dmRound', dm.round); };
+  const dmSaveSettings = () => store.set('dmSettings', dm.settings);
+
+  /* ── вход в режим ── */
+  function dmEnter() {
+    if (state.players.length < 2) { toast('Сначала добавьте игроков'); openPlayers('screen-games'); return; }
+    if (dm.round && dm.round.phase !== 'done') { dmOpenListen('hub'); return; }   // незавершённый раунд — в безопасную паузу
+    dmRenderSetup();
+    showScreen('screen-dm-setup');
+  }
+
+  /* ── настройки ── */
+  const dmRateLabel = () => {
+    const p = DM_PACE_PRESETS.find(p => Math.abs(dm.settings.rate - p.r) < .01);
+    return p ? 'Темп: ' + p.label.toLowerCase() + ' (' + dm.settings.rate.toFixed(2).replace(/\.?0+$/, '') + '×)'
+             : 'Свой темп: ' + dm.settings.rate.toFixed(2).replace(/\.?0+$/, '') + '×';
+  };
+  const dmPauseLabel = () => dm.settings.pause
+    ? 'Пауза: ' + dm.settings.pause.toFixed(2).replace(/\.?0+$/, '') + ' с'
+    : 'Без паузы — слова идут подряд';
+  function dmTotalLine() {
+    const nP = state.players.length, per = dm.settings.per, total = nP * per;
+    $('#dmTotalLine').textContent = nP < 2
+      ? 'Добавьте минимум 2 игроков'
+      : nP + ' ' + DMC.plural(nP, ['игрок', 'игрока', 'игроков']) + ' × ' + per + ' ' +
+        DMC.plural(per, ['вопрос', 'вопроса', 'вопросов']) + ' = ' + total + ' ' +
+        DMC.plural(total, ['слово', 'слова', 'слов']) + ' и ' + total + ' ' +
+        DMC.plural(total, ['проверка', 'проверки', 'проверок']);
+  }
+  function dmRenderTtsWarn(text) {
+    const w = $('#dmTtsWarn');
+    w.textContent = text || '';
+    w.classList.toggle('hidden', !text);
+    $('#dmStartBtn').classList.toggle('disabled', dm.ttsOk === false);
+  }
+  // русский голос ищем с запасом на асинхронную загрузку списка голосов
+  function dmCheckTts() {
+    clearInterval(dm.ttsIv);
+    if (!('speechSynthesis' in window)) {
+      dm.ttsOk = false;
+      dmRenderTtsWarn('В этом браузере нет синтеза речи — диктор не сможет зачитать слова. Режим требует голоса и здесь недоступен.');
+      return;
+    }
+    const find = () => speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
+    if (find()) { dm.ttsOk = true; dmRenderTtsWarn(''); return; }
+    dm.ttsOk = null;
+    dmRenderTtsWarn('Ищу русский голос…');
+    let waited = 0;
+    dm.ttsIv = setInterval(() => {
+      if (find()) {
+        clearInterval(dm.ttsIv);
+        dm.ttsOk = true;
+        if (activeScreenId() === 'screen-dm-setup') dmRenderTtsWarn('');
+      } else if ((waited += 200) >= 2500) {
+        clearInterval(dm.ttsIv);
+        dm.ttsOk = false;
+        if (activeScreenId() === 'screen-dm-setup') {
+          dmRenderTtsWarn('Русский голос не найден — диктор не сможет зачитать слова. Режим требует голоса и здесь недоступен.');
+        }
+      }
+    }, 200);
+  }
+  function dmRenderSetup() {
+    $('#dmPerChips').innerHTML = DM_PER_PRESETS.map(p =>
+      `<button data-per="${p.n}" class="${dm.settings.per === p.n ? 'on' : ''}">${p.label}</button>`).join('');
+    $('#dmPerValue').textContent = dm.settings.per;
+    $('#dmPaceChips').innerHTML = DM_PACE_PRESETS.map(p =>
+      `<button data-rate="${p.r}" class="${Math.abs(dm.settings.rate - p.r) < .01 ? 'on' : ''}">${p.label}</button>`).join('');
+    $('#dmRateRange').value = dm.settings.rate;
+    $('#dmRateTag').textContent = dmRateLabel();
+    $('#dmPauseRange').value = dm.settings.pause;
+    $('#dmPauseTag').textContent = dmPauseLabel();
+    $('#dmDrawChips').innerHTML = DM_DRAW_PRESETS.map(s =>
+      `<button data-draw="${s}" class="${dm.settings.drawSecs === s ? 'on' : ''}">${s ? s + ' с' : 'Без таймера'}</button>`).join('');
+    dmTotalLine();
+    dmCheckTts();
+  }
+  $('#dmSetupBack').addEventListener('click', () => showScreen('screen-games'));
+  $('#dmPerChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-per]'); if (!b) return;
+    dm.settings.per = +b.dataset.per; dmSaveSettings(); dmRenderSetup();
+  });
+  $('#dmPerMinus').addEventListener('click', () => { dm.settings.per = Math.max(1, dm.settings.per - 1); dmSaveSettings(); dmRenderSetup(); });
+  $('#dmPerPlus').addEventListener('click', () => { dm.settings.per = Math.min(10, dm.settings.per + 1); dmSaveSettings(); dmRenderSetup(); });
+  $('#dmPaceChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-rate]'); if (!b) return;
+    dm.settings.rate = +b.dataset.rate; dmSaveSettings(); dmRenderSetup();
+  });
+  $('#dmRateRange').addEventListener('input', () => {
+    dm.settings.rate = dmNum($('#dmRateRange').value, 1, .5, 1.5);
+    dmSaveSettings(); dmRenderSetup();
+  });
+  $('#dmPauseRange').addEventListener('input', () => {
+    dm.settings.pause = dmNum($('#dmPauseRange').value, 1, 0, 3);
+    dmSaveSettings(); dmRenderSetup();
+  });
+  $('#dmDrawChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-draw]'); if (!b) return;
+    dm.settings.drawSecs = +b.dataset.draw; dmSaveSettings(); dmRenderSetup();
+  });
+  $('#dmStartBtn').addEventListener('click', () => {
+    if (dm.ttsOk === false) { toast('Голос недоступен — режим не начнётся без диктора'); return; }
+    if (state.players.length < 2) { toast('Нужно минимум 2 игрока'); return; }
+    dmStartRound();
+  });
+
+  /* ── старт раунда: слова и пары генерируются один раз и сохраняются ── */
+  function dmStartRound() {
+    if (state.players.length < 2) { toast('Нужно минимум 2 игрока'); return; }
+    const players = state.players.slice();
+    const per = dm.settings.per;
+    const total = players.length * per;
+    const allWords = DMD.cats.reduce((a, c) => a.concat(c.words), []);
+    if (total > allWords.length) { toast('Слишком много слов для базы — уменьшите настройку'); return; }
+    dmStopEngine();
+    dm.round = {
+      v: 1, phase: 'listen', players, per, total,
+      words: DMC.pickWords(allWords, total, dm.recent),
+      pairs: DMC.buildPairs(players, per),
+      cards: [], scores: DMC.newScores(players), hist: [],
+      listenIdx: 0, drawEndsAt: 0, drawLeft: 0, created: Date.now()
+    };
+    dm.round.cards = dm.round.pairs.map(() => ({ state: 'pending', num: null, result: null, revealed: false }));
+    // слова уже услышат — отмечаем как недавние сразу, повтор в следующем раунде не страшен
+    dm.recent = DMC.mergeRecent(dm.recent, dm.round.words, 80);
+    store.set('dmRecent', dm.recent);
+    dmSave();
+    dmOpenListen('brief');
+  }
+
+  /* ── экран слушания (brief — инструкция, hub — пауза раунда) ── */
+  function dmOpenListen(mode) {
+    const r = dm.round;
+    $('#dmListenBtn').classList.add('hidden');
+    $('#dmNewRoundBtn').classList.add('hidden');
+    $('#dmEq').classList.add('off');
+    $('#dmListenProgress').textContent = 'Приготовьтесь';
+    $('#dmBigNum').textContent = '?';
+    if (mode === 'brief') {
+      $('#dmListenNote').innerHTML = 'Возьмите бумагу и нарисуйте <b>одинаковое число пронумерованных ячеек</b> — по ' +
+        r.total + ' на каждого.<br><br>Каждое слово рисуйте в ячейке со своим номером. ' +
+        '<b>Писать слова буквами нельзя</b> — только рисунки.';
+      $('#dmListenBtn').querySelector('span').textContent = 'Начать отсчёт';
+      $('#dmListenBtn').classList.remove('hidden');
+    } else {
+      // пауза: слова заново не проигрываем — только явное «Продолжить»
+      const note = r.phase === 'listen'
+        ? 'Диктор дошёл до слова ' + Math.min(r.listenIdx + 1, r.total) + ' из ' + r.total + '. Продолжите — чтение пойдёт с этого слова.'
+        : r.phase === 'draw'
+          ? 'Рисунки почти готовы — осталось дорисовать.'
+          : 'Осталось провести проверок: ' + r.cards.filter(c => c.state !== 'done').length + '.';
+      $('#dmListenNote').innerHTML = '<b>Раунд приостановлен.</b><br>' + note;
+      $('#dmListenBtn').querySelector('span').textContent =
+        r.phase === 'listen' ? 'Продолжить чтение' : r.phase === 'draw' ? 'К дорисовке' : 'К проверкам';
+      $('#dmListenBtn').classList.remove('hidden');
+      $('#dmNewRoundBtn').classList.remove('hidden');
+    }
+    showScreen('screen-dm-listen');
+  }
+  $('#dmListenBtn').addEventListener('click', () => {
+    const r = dm.round; if (!r) return;
+    if (r.phase === 'draw') return dmOpenDraw();
+    if (r.phase === 'checks') return dmOpenChecks();
+    if (r.listenIdx > 0) return dmSpeakFrom(r.listenIdx);   // продолжение — без отсчёта
+    dmPrimeTts();
+    dmCountdown();
+  });
+  $('#dmNewRoundBtn').addEventListener('click', () => {
+    if (!confirm('Начать новый раунд? Текущий прогресс пропадёт.')) return;
+    dmStopEngine();
+    dm.round = null;
+    store.set('dmRound', null);
+    dmRenderSetup();
+    showScreen('screen-dm-setup');
+  });
+  $('#dmListenBack').addEventListener('click', () => {
+    if (!confirm('Выйти? Раунд сохранится — продолжить можно позже.')) return;
+    dmStopEngine();
+    showScreen('screen-games');
+  });
+
+  /* ── TTS-движок режима: последовательное чтение с гвардией токена (DM-1).
+     Любая остановка (выход, модалка, новый раунд) поднимает токен —
+     «хвосты» onend/onerror и отложенные паузы молча умирают ── */
+  function dmPrimeTts() {
+    if (!('speechSynthesis' in window)) return;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}   // разблокировка жестом (iOS)
+  }
+  function dmCountdown() {
+    dmStopEngine();
+    const token = ++dm.seqToken;
+    dm.running = true;
+    let n = 3;
+    $('#dmListenBtn').classList.add('hidden');
+    const tick = () => {
+      if (token !== dm.seqToken) return;
+      if (n <= 0) {
+        clearInterval(dm.tickId); dm.tickId = null;
+        $('#dmBigNum').textContent = '';
+        dmSpeakFrom(dm.round ? dm.round.listenIdx : 0);
+        return;
+      }
+      $('#dmListenProgress').textContent = 'Приготовьтесь';
+      $('#dmBigNum').textContent = n;
+      beep(660, .12, 'triangle', .16);
+      vibrate(30);
+      n--;
+    };
+    tick();
+    dm.tickId = setInterval(tick, 1000);
+  }
+  function dmSpeakFrom(i) {
+    const r = dm.round; if (!r) return;
+    dmStopEngine();
+    const token = ++dm.seqToken;
+    dm.running = true;
+    r.phase = 'listen';
+    const say = () => {
+      if (token !== dm.seqToken) return;
+      if (i >= r.total) return dmFinishListen(token);
+      r.listenIdx = i; dmSave();
+      // на экране только номер и прогресс — сами слова не показываются и не озвучиваются дважды
+      $('#dmListenProgress').textContent = 'Слово ' + (i + 1) + ' из ' + r.total;
+      $('#dmBigNum').textContent = i + 1;
+      $('#dmListenNote').textContent = 'Зарисуйте слово №' + (i + 1) + ' в ячейке №' + (i + 1) + ' — буквы нельзя';
+      $('#dmEq').classList.remove('off');
+      let advanced = false;
+      const adv = () => {
+        if (token !== dm.seqToken || advanced) return;
+        advanced = true;
+        clearTimeout(wd);
+        $('#dmEq').classList.add('off');
+        i += 1;
+        if (i >= r.total) return dmFinishListen(token);
+        setTimeout(() => { if (token === dm.seqToken) dmSpeakFrom(i); }, Math.round(dm.settings.pause * 1000));
+      };
+      const wd = setTimeout(adv, 12000 + 1000 / dm.settings.rate);   // страховка, если onend не придёт
+      const u = new SpeechSynthesisUtterance(r.words[i]);
+      u.lang = 'ru-RU';
+      if (ruVoice) u.voice = ruVoice;
+      u.rate = dm.settings.rate;
+      u.onend = adv; u.onerror = adv;
+      try { speechSynthesis.cancel(); speechSynthesis.speak(u); } catch { adv(); }
+    };
+    say();
+  }
+  function dmFinishListen(token) {
+    if (token !== dm.seqToken) return;
+    const r = dm.round; if (!r) return;
+    r.listenIdx = r.total;
+    r.phase = 'draw';
+    if (dm.settings.drawSecs > 0) r.drawEndsAt = Date.now() + dm.settings.drawSecs * 1000;
+    dmSave();
+    clearInterval(dm.tickId); dm.tickId = null; dm.running = false;
+    beep(880, .18, 'triangle', .18);
+    vibrate([60, 60, 140]);
+    dmOpenDraw();
+  }
+
+  /* ── время дорисовать ── */
+  function dmOpenDraw() {
+    const r = dm.round; if (!r) return;
+    dmStopEngine();
+    r.phase = 'draw';
+    if (r.drawLeft > 0) { r.drawEndsAt = Date.now() + r.drawLeft * 1000; r.drawLeft = 0; }
+    dmSave();
+    showScreen('screen-dm-draw');
+    const tmr = $('#dmDrawTime');
+    if (!r.drawEndsAt) { tmr.textContent = '∞'; return; }   // вариант «без таймера»
+    const token = ++dm.seqToken;
+    dm.running = true;
+    const tick = () => {
+      if (token !== dm.seqToken) return;
+      const left = Math.max(0, Math.round((r.drawEndsAt - Date.now()) / 1000));
+      tmr.textContent = fmtTime(left);
+      if (left <= 0) {
+        dmStopEngine();
+        beep(660, .15, 'triangle', .18); beep(880, .2, 'triangle', .18, .2);
+        vibrate([120, 80, 120]);
+        dmOpenChecks();
+      }
+    };
+    tick();
+    dm.tickId = setInterval(tick, 250);
+  }
+  $('#dmToChecksBtn').addEventListener('click', () => { dmStopEngine(); dmOpenChecks(); });
+  $('#dmDrawBack').addEventListener('click', () => {
+    if (!confirm('Выйти? Раунд сохранится — продолжить можно позже.')) return;
+    dmStopEngine();
+    showScreen('screen-games');
+  });
+
+  /* ── остановка движка режима: TTS + таймеры умирают вместе (DM-1) ── */
+  function dmStopEngine() {
+    dm.seqToken++;
+    dm.running = false;
+    clearInterval(dm.tickId); dm.tickId = null;
+    try { speechSynthesis.cancel(); } catch {}
+  }
+  // приостановка с сохранением дедлайна дорисовки: вызывается из модалок и «Назад»
+  function dmSuspend(reason) {
+    if (!dm.round || dm.round.phase === 'done' || !dm.running) return;
+    const r = dm.round;
+    if (r.phase === 'draw' && r.drawEndsAt) {
+      r.drawLeft = Math.max(0, Math.ceil((r.drawEndsAt - Date.now()) / 1000));
+      r.drawEndsAt = 0;
+    }
+    dmStopEngine();
+    dmSave();
+    const act = activeScreenId();
+    if (act === 'screen-dm-listen' || act === 'screen-dm-draw') {
+      dmOpenListen('hub');   // безопасное состояние вместо «застывшего» экрана
+    }
+    if (reason) toast(reason);
+  }
+
+  /* ── список проверок ── */
+  function dmOpenChecks() {
+    const r = dm.round; if (!r) return;
+    dmStopEngine();
+    r.phase = 'checks'; dmSave();
+    dmRenderChecks();
+    showScreen('screen-dm-checks');
+  }
+  function dmRenderChecks() {
+    const r = dm.round;
+    const done = r.cards.filter(c => c.state === 'done').length;
+    $('#dmChecksProgress').textContent = 'Проверки: ' + done + ' из ' + r.total;
+    $('#dmScoresLine').textContent = r.players.map(nm => nm + ' — ' + (r.scores[nm] || 0)).join(' · ');
+    $('#dmCardsList').innerHTML = r.cards.map((c, i) => {
+      const p = r.pairs[i];
+      const st = c.state === 'done' ? 'Завершён' : c.state === 'active' ? 'В процессе' : 'Ожидает';
+      // слово в список карточек не попадает ни в каком виде (DM-2)
+      const sub = c.state === 'done'
+        ? '<small>№' + c.num + ' · ' + (c.result === 'answerer' ? 'очко: ' + esc(p.answerer)
+          : c.result === 'asker' ? 'очко: ' + esc(p.asker) : 'без очка') + '</small>'
+        : '';
+      return `<button type="button" class="dm-card ${c.state}" data-i="${i}" aria-label="Вопрос ${i + 1}: ${esc(p.asker)} задаёт ${esc(p.answerer)}, ${st}">
+        <span class="dm-q-num">${i + 1}</span>
+        <span class="dm-q-who">Вопрос ${i + 1}: ${esc(p.asker)} → ${esc(p.answerer)}${sub}</span>
+        <span class="dm-q-status">${st}</span>
+      </button>`;
+    }).join('');
+  }
+  $('#dmCardsList').addEventListener('click', e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    dmOpenCheck(+b.dataset.i);
+  });
+  $('#dmChecksBack').addEventListener('click', () => {
+    if (!confirm('Выйти? Раунд сохранится — продолжить можно позже.')) return;
+    showScreen('screen-games');
+  });
+
+  /* ── одна проверка ── */
+  function dmOpenCheck(i) {
+    const r = dm.round; if (!r || !r.cards[i]) return;
+    dm.checkIdx = i;
+    if (r.cards[i].state === 'pending') {
+      r.cards[i].state = 'active';
+      dmSave();
+    }
+    dmRenderCheck();
+    showScreen('screen-dm-check');
+  }
+  function dmRenderCheck() {
+    const r = dm.round, i = dm.checkIdx;
+    const c = r.cards[i], p = r.pairs[i];
+    $('#dmCheckHead').textContent = 'Вопрос ' + (i + 1) + ': ' + p.asker + ' → ' + p.answerer;
+    // падеж и род — по полу отвечающего, как в остальных режимах
+    const gA = state.genders[p.answerer] || guessGender(p.answerer);
+    const drew = 'нарисовал' + (gA === 'f' ? 'а' : '') + (gA === '' ? '(а)' : '');
+    const question = esc(p.asker) + ' спрашивает ' + esc(decline(p.answerer, 'acc', gA)) +
+      ': «Что ты ' + drew + ' под номером ' + c.num + '?»';
+    $('#dmCheckHint').classList.toggle('hidden', !!c.num);
+    $('#dmCheckHint').innerHTML = '<b>' + esc(p.asker) + '</b>, выбери номер рисунка';
+    // кнопки номеров: только цифры, никаких слов-подсказок (DM-2)
+    $('#dmNums').innerHTML = Array.from({ length: r.total }, (_, k) => {
+      const nmb = k + 1;
+      const chosen = c.num === nmb;
+      const dis = !!c.num;
+      return `<button type="button" class="dm-num${chosen ? ' sel' : ''}" data-num="${nmb}"${dis ? ' disabled' : ''} aria-label="Рисунок номер ${nmb}${chosen ? ', выбран' : ''}">${nmb}</button>`;
+    }).join('');
+    const revealed = c.revealed;
+    $('#dmCheckQuestion').classList.toggle('hidden', !c.num);
+    if (c.num) $('#dmCheckQuestion').innerHTML = question;
+    $('#dmRevealBox').classList.toggle('hidden', !revealed);
+    if (revealed) {
+      $('#dmRevealNum').textContent = c.num;
+      $('#dmRevealWord').textContent = r.words[c.num - 1];   // раскрытие — только здесь (DM-2)
+    }
+    $('#dmRevealBtn').classList.toggle('hidden', !c.num || revealed || c.state === 'done');
+    $('#dmVerdictRow').classList.toggle('hidden', !revealed || c.state === 'done');
+    $('#dmResultLine').classList.toggle('hidden', c.state !== 'done');
+    if (c.state === 'done') {
+      $('#dmResultLine').textContent = 'Результат: ' +
+        (c.result === 'answerer' ? 'очко отвечающему — ' + p.answerer
+        : c.result === 'asker' ? 'очко задающему — ' + p.asker : 'без очка');
+    }
+    $('#dmUndoBtn').classList.toggle('hidden', c.state !== 'done');
+  }
+  $('#dmNums').addEventListener('click', e => {
+    const b = e.target.closest('[data-num]'); if (!b || b.disabled) return;
+    const r = dm.round, c = r.cards[dm.checkIdx];
+    if (c.num || c.state === 'done') return;   // выбор один раз — случайный второй тап ничего не меняет
+    c.num = +b.dataset.num;
+    dmSave();
+    dmRenderCheck();
+  });
+  $('#dmCheckBack').addEventListener('click', () => dmOpenChecks());
+  $('#dmRevealBtn').addEventListener('click', () => {
+    const r = dm.round, c = r.cards[dm.checkIdx];
+    if (!c.num || c.revealed) return;
+    c.revealed = true;   // раскрытие — только явной кнопкой, случайно нельзя (DM-2)
+    dmSave();
+    dmRenderCheck();
+    beep(392, .1, 'triangle', .14);
+  });
+  const dmVerdict = result => {
+    const r = dm.round, i = dm.checkIdx;
+    const c = r.cards[i], p = r.pairs[i];
+    if (!c.revealed || c.state === 'done') return;
+    DMC.applyResult(r, i, result);
+    r.hist.push({
+      q: i + 1, asker: p.asker, answerer: p.answerer, num: c.num,
+      word: r.words[c.num - 1], result, corr: false
+    });
+    c.state = 'done';
+    dmSave();
+    vibrate(40);
+    toast(result === 'none' ? 'Без очка' : 'Очко: ' + (result === 'answerer' ? p.answerer : p.asker));
+    if (r.cards.every(x => x.state === 'done')) dmOpenResults();
+    else dmOpenChecks();
+  };
+  $('#dmPointAnswerer').addEventListener('click', () => dmVerdict('answerer'));
+  $('#dmPointAsker').addEventListener('click', () => dmVerdict('asker'));
+  $('#dmPointNone').addEventListener('click', () => dmVerdict('none'));
+  $('#dmUndoBtn').addEventListener('click', () => {
+    const r = dm.round, i = dm.checkIdx;
+    const c = r.cards[i], p = r.pairs[i];
+    if (!confirm('Отменить результат вопроса ' + (i + 1) + '? Очко вернётся на место.')) return;
+    DMC.applyResult(r, i, null);
+    r.hist.push({
+      q: i + 1, asker: p.asker, answerer: p.answerer, num: c.num,
+      word: r.words[c.num - 1], result: null, corr: true
+    });
+    c.state = 'pending';
+    c.result = null;
+    c.revealed = false;   // пересмотр — слово снова скрывается до кнопки раскрытия
+    dmSave();
+    toast('Результат отменён');
+    dmOpenChecks();
+  });
+
+  /* ── итоги раунда ── */
+  function dmOpenResults() {
+    const r = dm.round;
+    dmStopEngine();
+    r.phase = 'done'; dmSave();
+    const rows = r.players.map(nm => ({
+      nm,
+      score: r.scores[nm] || 0,
+      asks: r.pairs.filter(p => p.asker === nm).length,
+      ans: r.pairs.filter(p => p.answerer === nm).length
+    })).sort((a, b) => b.score - a.score);
+    const max = rows.length ? rows[0].score : 0;
+    const winners = rows.filter(x => x.score === max && max > 0);
+    $('#dmResultsTable').innerHTML = rows.map(x =>
+      `<div class="ph-result-row"><b>${esc(x.nm)}</b><span class="dm-sub">вопросов: ${x.asks} · ответов: ${x.ans}</span><span class="ph-score">${x.score}</span></div>`).join('');
+    $('#dmWinnerLine').innerHTML = winners.length
+      ? (winners.length === 1
+        ? 'Победитель: <b>' + esc(winners[0].nm) + '</b> — ' + max + ' ' + DMC.plural(max, ['очко', 'очка', 'очков'])
+        : 'Победители: <b>' + winners.slice(0, -1).map(w => esc(w.nm)).join(', ') + ' и ' + esc(winners[winners.length - 1].nm) + '</b> — по ' + max + ' ' + DMC.plural(max, ['очку', 'очка', 'очков']))
+      : 'Ни одного очка — победителя нет';
+    $('#dmHistory').classList.add('hidden');
+    $('#dmHistToggle').textContent = 'История проверок';
+    showScreen('screen-dm-results');
+    vibrate([60, 60, 140]);
+  }
+  const DM_RESULT_LABEL = { answerer: 'очко отвечающему', asker: 'очко задающему', none: 'без очка' };
+  function dmRenderHistory() {
+    $('#dmHistory').innerHTML = dm.round.hist.map(h =>
+      `<div class="dm-h-row">Вопрос ${h.q}: <b>${esc(h.asker)}</b> → <b>${esc(h.answerer)}</b> · №${h.num} · «${esc(h.word)}» · ${DM_RESULT_LABEL[h.result] || 'отменено'}${h.corr ? ' <span class="corr">пересмотр</span>' : ''}</div>`).join('');
+  }
+  $('#dmHistToggle').addEventListener('click', () => {
+    const h = $('#dmHistory');
+    if (h.classList.contains('hidden')) { dmRenderHistory(); h.classList.remove('hidden'); $('#dmHistToggle').textContent = 'Скрыть историю'; }
+    else { h.classList.add('hidden'); $('#dmHistToggle').textContent = 'История проверок'; }
+  });
+  $('#dmAgainBtn').addEventListener('click', () => dmStartRound());
+  $('#dmSetupBtn').addEventListener('click', () => { dmRenderSetup(); showScreen('screen-dm-setup'); });
+  $('#dmGamesBtn').addEventListener('click', () => showScreen('screen-games'));
+
   /* ══════════ Настройки ══════════ */
   /* доступность модалок: фокус входит внутрь и не покидает их (Tab по кругу),
      при закрытии возвращается на открывшую кнопку */
@@ -1322,6 +1871,7 @@
   }
   function openModal(sel) {
     modalOpener = document.activeElement;
+    dmSuspend('Раунд приостановлен');   // DM-1: меню поверх чтения слов не оставляет их играть в фоне
     $(sel).classList.remove('hidden');
     setAppInert(true);
     try { history.pushState({ fant: activeScreenId(), modal: sel.slice(1) }, ''); } catch {}
@@ -1508,7 +2058,8 @@
 
   /* ── FEAT-1: экран не засыпает во время партии (Screen Wake Lock) ── */
   let wakeLock = null;
-  const GAME_SCREENS = ['screen-wheel', 'screen-choice', 'screen-reveal', 'screen-phrase-round', 'screen-phrase-task', 'screen-phrase-results'];
+  const GAME_SCREENS = ['screen-wheel', 'screen-choice', 'screen-reveal', 'screen-phrase-round', 'screen-phrase-task', 'screen-phrase-results',
+    'screen-dm-listen', 'screen-dm-draw', 'screen-dm-checks', 'screen-dm-check', 'screen-dm-results'];
   async function keepAwake() {
     try {
       if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
@@ -1536,6 +2087,12 @@
   if (state.blitz) startBlitzClock();
   navFromPop = true; showScreen('screen-main'); navFromPop = false;
   history.replaceState({ fant: 'screen-main' }, '');   // NAV-1: базовая запись без дубля
+  // DM-RESTORE: незавершённый раунд открывается в безопасном состоянии —
+  // слова сами не проигрываются, продолжение только явной кнопкой
+  if (dm.round && dm.round.phase !== 'done' && state.players.length >= 2) {
+    dmOpenListen('hub');
+    history.replaceState({ fant: 'screen-dm-listen' }, '');
+  }
 
   // Escape закрывает модалки/всплывашку бана, Tab ходит по кругу внутри модалки
   addEventListener('keydown', e => {

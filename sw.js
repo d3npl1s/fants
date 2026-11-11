@@ -9,7 +9,8 @@ const withV = u => (u.endsWith('/') || u.endsWith('.html') ? u : u + '?v=' + VER
 // ядро: без него офлайн невозможен — addAll атомарен, эти файлы обязаны существовать
 const CORE = [
   './', './index.html',
-  './css/style.css', './js/lang.js', './js/data.js', './js/combo-data.js', './js/phrase-data.js', './js/app.js'
+  './css/style.css', './js/lang.js', './js/data.js', './js/combo-data.js', './js/phrase-data.js',
+  './js/draw-memory-data.js', './js/draw-memory-core.js', './js/app.js'
 ].map(withV);
 // остальное (иконки, шрифты): один 404 не должен ломать установку SW целиком
 const EXTRA = [
