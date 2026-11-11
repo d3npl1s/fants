@@ -1,6 +1,7 @@
 /* ═══════════════ Фанты — чистая логика «Нарисуй по памяти» ═══════════════
    Вынесено из app.js, чтобы гонять тесты на Node (tests/draw-memory.test.js):
-   выбор слов раунда, генерация пар «задающий → отвечающий», начисление очков.
+   выбор слов раунда, генерация пар «задающий → отвечающий», начисление баллов,
+   резерв номеров рисунков.
    Никакого DOM и localStorage — только данные на входе, данные на выходе.
 
    Алгоритм пар (DM-PAIRS): задающие фиксируются в случайном порядке, затем
@@ -32,7 +33,7 @@
     return arr;
   }
 
-  /* ── русские формы: plural(5, ['очко', 'очка', 'очков']) → «очков» ── */
+  /* ── русские формы: plural(5, ['балл', 'балла', 'баллов']) → «баллов» ── */
   function plural(n, forms) {
     const m10 = n % 10, m100 = n % 100;
     if (m10 === 1 && m100 !== 11) return forms[0];
@@ -126,14 +127,32 @@
     return shuffle(cards, rnd);   // порядок карточек тоже случайный
   }
 
-  /* ── новые очки: имя → 0 ── */
+  /* ── новые баллы: имя → 0 ── */
   function newScores(players) {
     const s = {};
     players.forEach(nm => { s[nm] = 0; });
     return s;
   }
 
-  /* ── начисление/снятие очка за карточку idx ──
+  /* ── резерв номера рисунка за проверкой idx (DM-NUMS) ──
+     Номер общий на всю партию: после принятия он навсегда исчезает из
+     доступных — независимо от того, кто спрашивает и кто отвечает.
+     Возвращает true, если резерв удался. Отказ (false) — когда номер вне
+     диапазона, уже использован в этой партии, карточка завершена или у неё
+     уже есть номер. Повторный вызов обработчика и перерендер резерв не
+     поднимают: usedNums живёт в состоянии раунда и сохраняется вместе с ним. */
+  function reserveNum(round, idx, num) {
+    const c = round && round.cards ? round.cards[idx] : null;
+    if (!c || c.state === 'done' || c.num) return false;
+    if (!Number.isInteger(num) || num < 1 || num > round.total) return false;
+    if (!Array.isArray(round.usedNums)) round.usedNums = [];
+    if (round.usedNums.includes(num)) return false;
+    c.num = num;
+    round.usedNums.push(num);
+    return true;
+  }
+
+  /* ── начисление/снятие балла за карточку idx ──
      Роли живут в round.pairs[idx] (карточки и пары — параллельные массивы).
      result: 'answerer' | 'asker' | 'none' | null (null — отмена результата).
      Возвращает true, если состояние изменилось. Двойное начисление невозможно:
@@ -161,5 +180,5 @@
     return out.length > cap ? out.slice(out.length - cap) : out;
   }
 
-  root.DRAW_MEMORY_CORE = { normWord, stem, shuffle, plural, pickWords, buildPairs, newScores, applyResult, mergeRecent };
+  root.DRAW_MEMORY_CORE = { normWord, stem, shuffle, plural, pickWords, buildPairs, newScores, reserveNum, applyResult, mergeRecent };
 })(typeof window !== 'undefined' ? window : globalThis);

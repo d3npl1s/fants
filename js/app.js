@@ -1367,6 +1367,16 @@
     r.hist = Array.isArray(r.hist) ? r.hist : [];
     r.listenIdx = Math.min(Math.max(0, Math.floor(dmNum(r.listenIdx, 0, 0, r.total))), r.total);
     r.drawLeft = Math.max(0, Math.floor(dmNum(r.drawLeft, 0, 0, 7200)));
+    // DM-NUMS: использованные номера общие на всю партию и переживают перезагрузку;
+    // список самовосстанавливается по карточкам — номер не может «вернуться» после сбоя
+    r.usedNums = Array.isArray(r.usedNums)
+      ? r.usedNums.filter(n => Number.isInteger(n) && n >= 1 && n <= r.total)
+      : [];
+    r.cards.forEach(c => {
+      if (c.num && Number.isInteger(c.num) && c.num >= 1 && c.num <= r.total && !r.usedNums.includes(c.num)) {
+        r.usedNums.push(c.num);
+      }
+    });
     return r;
   })();
   const dmSave = () => { if (dm.round) store.set('dmRound', dm.round); };
@@ -1489,6 +1499,7 @@
       words: DMC.pickWords(allWords, total, dm.recent),
       pairs: DMC.buildPairs(players, per),
       cards: [], scores: DMC.newScores(players), hist: [],
+      usedNums: [],   // DM-NUMS: номера рисунков, уже взятые любыми проверками партии
       listenIdx: 0, drawEndsAt: 0, drawLeft: 0, created: Date.now()
     };
     dm.round.cards = dm.round.pairs.map(() => ({ state: 'pending', num: null, result: null, revealed: false }));
@@ -1685,46 +1696,64 @@
     if (reason) toast(reason);
   }
 
-  /* ── список проверок ── */
+  /* ── проверки: по одной паре за раз (DM-SEQ) ──
+     Будущие пары заранее не показываются; следующая открывается только после
+     зафиксированного исхода текущей. Возврат на предыдущий экран результаты
+     не сбрасывает, а использованные номера не возвращает. */
+  function dmCurrentIdx() {
+    return dm.round ? dm.round.cards.findIndex(c => c.state !== 'done') : -1;
+  }
   function dmOpenChecks() {
     const r = dm.round; if (!r) return;
     dmStopEngine();
     r.phase = 'checks'; dmSave();
+    if (dmCurrentIdx() < 0) return dmOpenResults();   // все проверки закрыты
     dmRenderChecks();
     showScreen('screen-dm-checks');
   }
   function dmRenderChecks() {
     const r = dm.round;
-    const done = r.cards.filter(c => c.state === 'done').length;
-    $('#dmChecksProgress').textContent = 'Проверки: ' + done + ' из ' + r.total;
-    $('#dmScoresLine').textContent = r.players.map(nm => nm + ' — ' + (r.scores[nm] || 0)).join(' · ');
-    $('#dmCardsList').innerHTML = r.cards.map((c, i) => {
-      const p = r.pairs[i];
-      const st = c.state === 'done' ? 'Завершён' : c.state === 'active' ? 'В процессе' : 'Ожидает';
-      // слово в список карточек не попадает ни в каком виде (DM-2)
-      const sub = c.state === 'done'
-        ? '<small>№' + c.num + ' · ' + (c.result === 'answerer' ? 'очко: ' + esc(p.answerer)
-          : c.result === 'asker' ? 'очко: ' + esc(p.asker) : 'без очка') + '</small>'
-        : '';
-      return `<button type="button" class="dm-card ${c.state}" data-i="${i}" aria-label="Вопрос ${i + 1}: ${esc(p.asker)} задаёт ${esc(p.answerer)}, ${st}">
-        <span class="dm-q-num">${i + 1}</span>
-        <span class="dm-q-who">Вопрос ${i + 1}: ${esc(p.asker)} → ${esc(p.answerer)}${sub}</span>
-        <span class="dm-q-status">${st}</span>
-      </button>`;
-    }).join('');
+    const cur = dmCurrentIdx();
+    $('#dmChecksProgress').textContent = 'Проверка ' + (cur + 1) + ' из ' + r.total;
+    $('#dmScoresLine').textContent = 'Баллы: ' + r.players.map(nm => nm + ' ' + (r.scores[nm] || 0)).join(' · ');
+    const p = r.pairs[cur];
+    $('#dmPairNames').innerHTML = esc(p.asker) + ' → ' + esc(p.answerer);
+    $('#dmPairRoles').textContent = p.asker + ' задаёт вопрос · ' + p.answerer + ' отвечает';
+    const c = r.cards[cur];
+    $('#dmToCheckBtn').textContent = (c.state === 'active' && c.num) ? 'Продолжить проверку ›' : 'К проверке ›';
+    // пересмотр — только у только что закрытой проверки; её номер остаётся использованным
+    const last = cur > 0 && r.cards[cur - 1].state === 'done';
+    $('#dmUndoLastBtn').classList.toggle('hidden', !last);
   }
-  $('#dmCardsList').addEventListener('click', e => {
-    const b = e.target.closest('[data-i]'); if (!b) return;
-    dmOpenCheck(+b.dataset.i);
+  $('#dmToCheckBtn').addEventListener('click', () => dmOpenCheck(dmCurrentIdx()));
+  $('#dmUndoLastBtn').addEventListener('click', () => {
+    const r = dm.round;
+    const cur = dmCurrentIdx();
+    const i = cur - 1;
+    if (i < 0 || r.cards[i].state !== 'done') return;
+    const c = r.cards[i], p = r.pairs[i];
+    if (!confirm('Отменить результат проверки ' + (i + 1) + '? Балл вернётся на место.')) return;
+    DMC.applyResult(r, i, null);
+    r.hist.push({
+      q: i + 1, asker: p.asker, answerer: p.answerer, num: c.num,
+      word: r.words[c.num - 1], result: null, corr: true
+    });
+    c.state = 'active';
+    c.result = null;
+    // номер остаётся в usedNums: после раскрытия слова резерв не освобождается (DM-NUMS)
+    dmSave();
+    toast('Результат отменён');
+    dmRenderChecks();
   });
   $('#dmChecksBack').addEventListener('click', () => {
     if (!confirm('Выйти? Раунд сохранится — продолжить можно позже.')) return;
     showScreen('screen-games');
   });
 
-  /* ── одна проверка ── */
+  /* ── одна проверка (только текущая пара — пропустить нельзя, DM-SEQ) ── */
   function dmOpenCheck(i) {
     const r = dm.round; if (!r || !r.cards[i]) return;
+    if (i !== dmCurrentIdx()) return;   // чужая/завершённая проверка не открывается
     dm.checkIdx = i;
     if (r.cards[i].state === 'pending') {
       r.cards[i].state = 'active';
@@ -1736,7 +1765,7 @@
   function dmRenderCheck() {
     const r = dm.round, i = dm.checkIdx;
     const c = r.cards[i], p = r.pairs[i];
-    $('#dmCheckHead').textContent = 'Вопрос ' + (i + 1) + ': ' + p.asker + ' → ' + p.answerer;
+    $('#dmCheckHead').textContent = 'Проверка ' + (i + 1) + ': ' + p.asker + ' → ' + p.answerer;
     // падеж и род — по полу отвечающего, как в остальных режимах
     const gA = state.genders[p.answerer] || guessGender(p.answerer);
     const drew = 'нарисовал' + (gA === 'f' ? 'а' : '') + (gA === '' ? '(а)' : '');
@@ -1744,12 +1773,13 @@
       ': «Что ты ' + drew + ' под номером ' + c.num + '?»';
     $('#dmCheckHint').classList.toggle('hidden', !!c.num);
     $('#dmCheckHint').innerHTML = '<b>' + esc(p.asker) + '</b>, выбери номер рисунка';
-    // кнопки номеров: только цифры, никаких слов-подсказок (DM-2)
+    // кнопки номеров: только цифры (DM-2); использованные в партии — disabled (DM-NUMS)
     $('#dmNums').innerHTML = Array.from({ length: r.total }, (_, k) => {
       const nmb = k + 1;
       const chosen = c.num === nmb;
-      const dis = !!c.num;
-      return `<button type="button" class="dm-num${chosen ? ' sel' : ''}" data-num="${nmb}"${dis ? ' disabled' : ''} aria-label="Рисунок номер ${nmb}${chosen ? ', выбран' : ''}">${nmb}</button>`;
+      const used = r.usedNums.includes(nmb) || !!c.num;
+      const aria = 'Рисунок номер ' + nmb + (chosen ? ', выбран' : used ? ', уже использован' : '');
+      return `<button type="button" class="dm-num${chosen ? ' sel' : ''}${used && !chosen ? ' used' : ''}" data-num="${nmb}"${used ? ' disabled' : ''} aria-label="${aria}">${nmb}</button>`;
     }).join('');
     const revealed = c.revealed;
     $('#dmCheckQuestion').classList.toggle('hidden', !c.num);
@@ -1759,21 +1789,14 @@
       $('#dmRevealNum').textContent = c.num;
       $('#dmRevealWord').textContent = r.words[c.num - 1];   // раскрытие — только здесь (DM-2)
     }
-    $('#dmRevealBtn').classList.toggle('hidden', !c.num || revealed || c.state === 'done');
-    $('#dmVerdictRow').classList.toggle('hidden', !revealed || c.state === 'done');
-    $('#dmResultLine').classList.toggle('hidden', c.state !== 'done');
-    if (c.state === 'done') {
-      $('#dmResultLine').textContent = 'Результат: ' +
-        (c.result === 'answerer' ? 'очко отвечающему — ' + p.answerer
-        : c.result === 'asker' ? 'очко задающему — ' + p.asker : 'без очка');
-    }
-    $('#dmUndoBtn').classList.toggle('hidden', c.state !== 'done');
+    $('#dmRevealBtn').classList.toggle('hidden', !c.num || revealed);
+    $('#dmVerdictRow').classList.toggle('hidden', !revealed);
   }
   $('#dmNums').addEventListener('click', e => {
     const b = e.target.closest('[data-num]'); if (!b || b.disabled) return;
-    const r = dm.round, c = r.cards[dm.checkIdx];
-    if (c.num || c.state === 'done') return;   // выбор один раз — случайный второй тап ничего не меняет
-    c.num = +b.dataset.num;
+    const r = dm.round, i = dm.checkIdx, c = r.cards[i];
+    // двойная защита: настоящая disabled-кнопка + проверка резерва в обработчике (DM-NUMS)
+    if (!DMC.reserveNum(r, i, +b.dataset.num)) return;
     dmSave();
     dmRenderCheck();
   });
@@ -1789,7 +1812,7 @@
   const dmVerdict = result => {
     const r = dm.round, i = dm.checkIdx;
     const c = r.cards[i], p = r.pairs[i];
-    if (!c.revealed || c.state === 'done') return;
+    if (!c.revealed || c.state === 'done') return;   // исход фиксируется ровно один раз
     DMC.applyResult(r, i, result);
     r.hist.push({
       q: i + 1, asker: p.asker, answerer: p.answerer, num: c.num,
@@ -1798,29 +1821,13 @@
     c.state = 'done';
     dmSave();
     vibrate(40);
-    toast(result === 'none' ? 'Без очка' : 'Очко: ' + (result === 'answerer' ? p.answerer : p.asker));
+    toast(result === 'none' ? 'Никому' : 'Балл: ' + (result === 'answerer' ? p.answerer : p.asker));
     if (r.cards.every(x => x.state === 'done')) dmOpenResults();
-    else dmOpenChecks();
+    else dmOpenChecks();   // сразу открывается следующая пара (DM-SEQ)
   };
   $('#dmPointAnswerer').addEventListener('click', () => dmVerdict('answerer'));
   $('#dmPointAsker').addEventListener('click', () => dmVerdict('asker'));
   $('#dmPointNone').addEventListener('click', () => dmVerdict('none'));
-  $('#dmUndoBtn').addEventListener('click', () => {
-    const r = dm.round, i = dm.checkIdx;
-    const c = r.cards[i], p = r.pairs[i];
-    if (!confirm('Отменить результат вопроса ' + (i + 1) + '? Очко вернётся на место.')) return;
-    DMC.applyResult(r, i, null);
-    r.hist.push({
-      q: i + 1, asker: p.asker, answerer: p.answerer, num: c.num,
-      word: r.words[c.num - 1], result: null, corr: true
-    });
-    c.state = 'pending';
-    c.result = null;
-    c.revealed = false;   // пересмотр — слово снова скрывается до кнопки раскрытия
-    dmSave();
-    toast('Результат отменён');
-    dmOpenChecks();
-  });
 
   /* ── итоги раунда ── */
   function dmOpenResults() {
@@ -1837,20 +1844,22 @@
     const winners = rows.filter(x => x.score === max && max > 0);
     $('#dmResultsTable').innerHTML = rows.map(x =>
       `<div class="ph-result-row"><b>${esc(x.nm)}</b><span class="dm-sub">вопросов: ${x.asks} · ответов: ${x.ans}</span><span class="ph-score">${x.score}</span></div>`).join('');
+    // дательный после «по»: 1 баллу / 2 балла / 5 баллов
+    const byDative = n => n === 1 ? 'баллу' : DMC.plural(n, ['балла', 'балла', 'баллов']);
     $('#dmWinnerLine').innerHTML = winners.length
       ? (winners.length === 1
-        ? 'Победитель: <b>' + esc(winners[0].nm) + '</b> — ' + max + ' ' + DMC.plural(max, ['очко', 'очка', 'очков'])
-        : 'Победители: <b>' + winners.slice(0, -1).map(w => esc(w.nm)).join(', ') + ' и ' + esc(winners[winners.length - 1].nm) + '</b> — по ' + max + ' ' + DMC.plural(max, ['очку', 'очка', 'очков']))
-      : 'Ни одного очка — победителя нет';
+        ? 'Победитель: <b>' + esc(winners[0].nm) + '</b> — ' + max + ' ' + DMC.plural(max, ['балл', 'балла', 'баллов'])
+        : 'Ничья: <b>' + winners.slice(0, -1).map(w => esc(w.nm)).join(', ') + ' и ' + esc(winners[winners.length - 1].nm) + '</b> — по ' + max + ' ' + byDative(max))
+      : 'Ни одного балла — победителя нет';
     $('#dmHistory').classList.add('hidden');
     $('#dmHistToggle').textContent = 'История проверок';
     showScreen('screen-dm-results');
     vibrate([60, 60, 140]);
   }
-  const DM_RESULT_LABEL = { answerer: 'очко отвечающему', asker: 'очко задающему', none: 'без очка' };
+  const DM_RESULT_LABEL = { answerer: 'баллы отвечающему', asker: 'баллы задающему', none: 'никому' };
   function dmRenderHistory() {
     $('#dmHistory').innerHTML = dm.round.hist.map(h =>
-      `<div class="dm-h-row">Вопрос ${h.q}: <b>${esc(h.asker)}</b> → <b>${esc(h.answerer)}</b> · №${h.num} · «${esc(h.word)}» · ${DM_RESULT_LABEL[h.result] || 'отменено'}${h.corr ? ' <span class="corr">пересмотр</span>' : ''}</div>`).join('');
+      `<div class="dm-h-row">Проверка ${h.q}: <b>${esc(h.asker)}</b> → <b>${esc(h.answerer)}</b> · №${h.num} · «${esc(h.word)}» · ${DM_RESULT_LABEL[h.result] || 'отменено'}${h.corr ? ' <span class="corr">пересмотр</span>' : ''}</div>`).join('');
   }
   $('#dmHistToggle').addEventListener('click', () => {
     const h = $('#dmHistory');

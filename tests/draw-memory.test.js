@@ -1,7 +1,7 @@
 /* ═══════════════ Тесты режима «Нарисуй по памяти» ═══════════════
    Запуск: node tests/draw-memory.test.js
    Проверяет базу слов и чистую логику (draw-memory-core.js):
-   пары, выбор слов, начисление очков, сохранение состояния. */
+   пары, выбор слов, начисление баллов, резерв номеров, сохранение состояния. */
 'use strict';
 globalThis.window = globalThis;
 require('../js/draw-memory-data.js');
@@ -45,11 +45,11 @@ allWords.forEach(w => {
 });
 
 /* ── plural ── */
-eq(DMC.plural(1, ['очко', 'очка', 'очков']), 'очко', 'plural 1');
-eq(DMC.plural(2, ['очко', 'очка', 'очков']), 'очка', 'plural 2');
-eq(DMC.plural(5, ['очко', 'очка', 'очков']), 'очков', 'plural 5');
-eq(DMC.plural(11, ['очко', 'очка', 'очков']), 'очков', 'plural 11');
-eq(DMC.plural(21, ['очко', 'очка', 'очков']), 'очко', 'plural 21');
+eq(DMC.plural(1, ['балл', 'балла', 'баллов']), 'балл', 'plural 1 балл');
+eq(DMC.plural(2, ['балл', 'балла', 'баллов']), 'балла', 'plural 2 балла');
+eq(DMC.plural(5, ['балл', 'балла', 'баллов']), 'баллов', 'plural 5 баллов');
+eq(DMC.plural(11, ['балл', 'балла', 'баллов']), 'баллов', 'plural 11 баллов');
+eq(DMC.plural(21, ['балл', 'балла', 'баллов']), 'балл', 'plural 21 балл');
 eq(DMC.plural(3, ['вопрос', 'вопроса', 'вопросов']), 'вопроса', 'plural 3 вопроса');
 
 /* ── §10.1–10.5: пары для 2, 3, 5, 12 игроков × per 1..6, много случайных прогонов ── */
@@ -128,7 +128,7 @@ for (const size of [2, 3, 5, 12]) {
   eq(DMC.pickWords(allWords, 500).length, allWords.length, 'pickWords не отдаёт больше базы');
 }
 
-/* ── §10.8–10.9: очки — три результата, без двойного начисления, «Никому» не меняет счёт ── */
+/* ── §10.8–10.9: баллы — три результата, без двойного начисления, «Никому» не меняет счёт ── */
 {
   const round = {
     players: ['Аня', 'Боря', 'Вика'],
@@ -143,22 +143,90 @@ for (const size of [2, 3, 5, 12]) {
     ]
   };
   ok(DMC.applyResult(round, 0, 'answerer'), 'результат применяется');
-  eq(round.scores['Боря'], 1, 'очко отвечающему');
-  eq(round.scores['Аня'], 0, 'задающий без очка');
+  eq(round.scores['Боря'], 1, 'балл отвечающему');
+  eq(round.scores['Аня'], 0, 'задающий без балла');
   ok(!DMC.applyResult(round, 0, 'answerer'), 'повтор того же результата — no-op');
   eq(round.scores['Боря'], 1, 'двойного начисления нет');
   ok(DMC.applyResult(round, 0, 'asker'), 'результат можно скорректировать');
-  eq(round.scores['Боря'], 0, 'старое очко снято');
-  eq(round.scores['Аня'], 1, 'очко задающему');
+  eq(round.scores['Боря'], 0, 'старый балл снят');
+  eq(round.scores['Аня'], 1, 'балл задающему');
   ok(DMC.applyResult(round, 0, 'none'), '«Никому» применяется');
   eq(round.scores['Аня'], 0, '«Никому» не меняет счёт (сняло старое)');
   eq(round.scores['Боря'], 0, '«Никому» не меняет счёт');
   ok(DMC.applyResult(round, 0, null), 'отмена результата');
-  eq(round.scores['Аня'] + round.scores['Боря'], 0, 'после отмены очков нет');
+  eq(round.scores['Аня'] + round.scores['Боря'], 0, 'после отмены баллов нет');
   // «Никому» на чистой карточке фиксируется на карточке, но счёт не трогает
   ok(DMC.applyResult(round, 1, 'none'), '«Никому» на чистой карточке записывается');
   eq(round.cards[1].result, 'none', 'результат «Никому» сохранён на карточке');
   eq(round.scores['Аня'] + round.scores['Боря'] + round.scores['Вика'], 0, 'счёт по-прежнему нулевой');
+
+/* ── DM-NUMS: резерв номеров — один номер на всю партию ── */
+{
+  const roster = ['Аня', 'Боря', 'Вика'];
+  const round = {
+    total: 6, players: roster.slice(),
+    scores: DMC.newScores(roster),
+    pairs: DMC.buildPairs(roster, 2),
+    cards: DMC.buildPairs(roster, 2).map(() => ({ state: 'pending', num: null, result: null, revealed: false })),
+    usedNums: [], hist: []
+  };
+  ok(DMC.reserveNum(round, 0, 3), 'номер резервируется');
+  eq(round.cards[0].num, 3, 'номер записан на карточку');
+  eq(round.usedNums.join('|'), '3', 'номер попал в общий список партии');
+  ok(!DMC.reserveNum(round, 1, 3), 'тот же номер в другой проверке недоступен');
+  ok(!DMC.reserveNum(round, 0, 3), 'повторный вызов обработчика — no-op');
+  ok(DMC.reserveNum(round, 1, 1), 'другой номер свободен');
+  ok(!DMC.reserveNum(round, 2, 0), 'номер вне диапазона снизу отвергнут');
+  ok(!DMC.reserveNum(round, 2, 7), 'номер вне диапазона сверху отвергнут');
+  ok(!DMC.reserveNum(round, 2, 2.5), 'дробный номер отвергнут');
+  // завершённая карточка и карточка с номером не принимают резерв
+  round.cards[0].state = 'done';
+  ok(!DMC.reserveNum(round, 0, 5), 'завершённая карточка номер не меняет');
+  ok(!DMC.reserveNum(round, 1, 5), 'карточка с номером второй не принимает');
+  // отмена результата не возвращает номер в пул
+  round.cards[0].state = 'pending'; round.cards[0].result = 'answerer';
+  DMC.applyResult(round, 0, null);
+  ok(!DMC.reserveNum(round, 0, 3), 'после раскрытия/отмены номер 3 остаётся использованным');
+  eq(round.usedNums.length, 2, 'usedNums не разросся и не сократился');
+}
+
+/* ── §5 приёмка: 5 игроков × 3 = 15 проверок, номера строго по одному разу ── */
+for (let sim = 0; sim < 200; sim++) {
+  const roster = ROSTERS[5];
+  const total = 15;
+  const round = {
+    total, players: roster.slice(), per: 3,
+    scores: DMC.newScores(roster),
+    pairs: DMC.buildPairs(roster, 3),
+    cards: [], usedNums: [], hist: []
+  };
+  round.cards = round.pairs.map(() => ({ state: 'pending', num: null, result: null, revealed: false }));
+  let verdicts = 0;
+  for (let i = 0; i < total; i++) {
+    // каждая проверка берёт СВОБОДНЫЙ номер (в случайном порядке, как игроки)
+    const free = Array.from({ length: total }, (_, k) => k + 1).filter(n => !round.usedNums.includes(n));
+    eq(free.length, total - i, `сим ${sim}: перед проверкой ${i + 1} свободно ${total - i} номеров`);
+    const num = free[Math.floor(Math.random() * free.length)];
+    ok(DMC.reserveNum(round, i, num), `сим ${sim}: номер ${num} зарезервирован за проверкой ${i + 1}`);
+    round.cards[i].revealed = true;
+    // исход: ровно один из трёх вариантов
+    const result = ['answerer', 'asker', 'none'][Math.floor(Math.random() * 3)];
+    ok(DMC.applyResult(round, i, result), `сим ${sim}: исход ${result} зафиксирован`);
+    ok(!DMC.applyResult(round, i, result), `сим ${sim}: повторное начисление невозможно`);
+    round.cards[i].state = 'done';
+    verdicts++;
+  }
+  eq(verdicts, 15, `сим ${sim}: 15 проверок с одним исходом каждая`);
+  eq(round.usedNums.length, 15, `сим ${sim}: все 15 номеров использованы ровно по разу`);
+  eq(new Set(round.usedNums).size, 15, `сим ${sim}: без дублей в usedNums`);
+  const sum = Object.values(round.scores).reduce((a, b) => a + b, 0);
+  const expected = round.cards.filter(c => c.result !== 'none').length;
+  eq(sum, expected, `сим ${sim}: сумма баллов = числу ненулевых исходов`);
+  // новая партия — номера снова доступны
+  round.usedNums = [];
+  round.cards.forEach(c => { c.num = null; c.state = 'pending'; c.result = null; });
+  ok(DMC.reserveNum(round, 0, 3), 'в новой партии номера снова доступны');
+}
 }
 
 /* ── §10.10: перезагрузка/перерендер не меняют сохранённое состояние ── */
@@ -178,7 +246,9 @@ for (const size of [2, 3, 5, 12]) {
   eq(JSON.stringify(restored), saved, 'круговая поездка JSON не меняет данные');
   // восстановленный раунд дорабатывается: очки, карточки, история
   ok(DMC.applyResult(restored, 5, 'asker'), 'восстановленный раунд принимает результат');
-  eq(restored.scores[restored.pairs[5].asker], 1, 'очки восстановленного раунда считаются');
+  const asker5 = restored.pairs[5].asker;
+  // дельта, а не абсолют: у игрока может быть балл из предзаполненной карточки 2
+  eq(restored.scores[asker5] - (round.scores[asker5] || 0), 1, 'баллы восстановленного раунда считаются');
   eq(restored.pairs[2].answerer, round.pairs[2].answerer, 'пары после восстановления те же');
   eq(restored.cards[2].result, 'answerer', 'карточки после восстановления те же');
   // repeatable: ядро ничего не пишет в localStorage

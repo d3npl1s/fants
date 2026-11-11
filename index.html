@@ -260,25 +260,32 @@
     </div>
   </section>
 
-  <!-- ══════════ Экран 6в: список проверок ══════════ -->
+  <!-- ══════════ Экран 6в: текущая пара (по одной за раз, DM-SEQ) ══════════ -->
   <section class="screen screen-dm-checks" id="screen-dm-checks">
     <button class="corner-back" id="dmChecksBack" aria-label="Выйти из раунда">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
     </button>
     <div class="dm-checks-inner">
-      <p class="ph-progress" id="dmChecksProgress">Проверки: 0 из 0</p>
+      <p class="ph-progress" id="dmChecksProgress">Проверка 1 из 1</p>
       <div class="dm-scores-line" id="dmScoresLine"></div>
-      <div class="dm-cards" id="dmCardsList"></div>
+      <div class="dm-pair-card">
+        <p class="dm-pair-names" id="dmPairNames"></p>
+        <p class="dm-pair-roles" id="dmPairRoles"></p>
+      </div>
+      <div class="dm-listen-actions">
+        <button class="done-btn wide" id="dmToCheckBtn">К проверке ›</button>
+        <button class="ghost-btn dm-undo hidden" id="dmUndoLastBtn">Отменить последний результат</button>
+      </div>
     </div>
   </section>
 
   <!-- ══════════ Экран 7в: одна проверка ══════════ -->
   <section class="screen screen-dm-check" id="screen-dm-check">
-    <button class="corner-back" id="dmCheckBack" aria-label="К списку проверок">
+    <button class="corner-back" id="dmCheckBack" aria-label="К текущей паре">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
     </button>
     <div class="dm-check-inner">
-      <p class="ph-progress" id="dmCheckHead">Вопрос</p>
+      <p class="ph-progress" id="dmCheckHead">Проверка</p>
       <p class="dm-note" id="dmCheckHint"></p>
       <div class="dm-nums" id="dmNums"></div>
       <p class="dm-question hidden" id="dmCheckQuestion"></p>
@@ -286,15 +293,13 @@
         <p class="dm-reveal-label">Под номером <b id="dmRevealNum"></b> было слово</p>
         <p class="dm-reveal-word" id="dmRevealWord"></p>
       </div>
-      <p class="dm-result-line hidden" id="dmResultLine"></p>
       <div class="dm-check-actions">
         <button class="done-btn wide hidden" id="dmRevealBtn">Показать исходное слово</button>
         <div class="dm-verdict hidden" id="dmVerdictRow">
-          <button class="dm-v-btn a" id="dmPointAnswerer">Очко отвечающему</button>
-          <button class="dm-v-btn q" id="dmPointAsker">Очко задающему</button>
+          <button class="dm-v-btn a" id="dmPointAnswerer">Баллы отвечающему</button>
+          <button class="dm-v-btn q" id="dmPointAsker">Баллы задающему</button>
           <button class="dm-v-btn n" id="dmPointNone">Никому</button>
         </div>
-        <button class="ghost-btn dm-undo hidden" id="dmUndoBtn">Отменить результат</button>
       </div>
     </div>
   </section>
@@ -303,6 +308,7 @@
   <section class="screen" id="screen-dm-results">
     <div class="phrase-setup-inner">
       <h2 class="setup-title" id="dmResultsTitle">Раунд завершён</h2>
+      <p class="dm-sub-title">Баллы игроков</p>
       <div id="dmResultsTable" class="ph-results"></div>
       <p class="ph-loser" id="dmWinnerLine"></p>
       <button class="ghost-btn" id="dmHistToggle">История проверок</button>
