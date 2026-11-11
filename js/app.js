@@ -67,6 +67,8 @@
     bags: {},             // мешки заданий без повторов
     taskTimerId: null,
     spinning: false,
+    spinRmTimer: null,      // SPIN-3: отложенный finishSpin при prefers-reduced-motion (250 мс)
+    spinChoiceTimer: null,  // SPIN-3: отложенный openChoice после finishSpin (700 мс)
     recent: [],             // последние 2 игрока колеса — чтобы не выпадали подряд
     recentSkel: [],         // последние 4 скелета комбо — анти-залипание (только сессия)
     recentObj: [],          // последние 3 объекта комбо — «чайка» не упадёт трижды подряд
@@ -92,8 +94,9 @@
      «Назад» закрывает их первым; popstate возвращает на предыдущий экран */
   let navFromPop = false;   // показ экрана из popstate не кладёт новую запись
   function showScreen(id) {
-    // SPIN-2: уход с экрана колеса посреди прокрутки гасит анимацию/RAF/щелчки целиком
-    if (id !== 'screen-wheel' && (state.spinAnim || state.spinRaf)) {
+    // SPIN-2/3: уход с экрана колеса гасит прокрутку в любом активном состоянии —
+    // WAAPI, RAF, reduced-motion-таймер и отложенный openChoice, не только anim/raf
+    if (id !== 'screen-wheel' && (state.spinAnim || state.spinRaf || state.spinRmTimer || state.spinChoiceTimer)) {
       state.spinToken = (state.spinToken || 0) + 1;
       cancelSpin();
       $('#spinOverlay').classList.add('hidden');
@@ -665,20 +668,24 @@
     store.set('chosen', state.chosen);
   }
 
-  /* ── SPIN-2: анимация колеса ──
+  /* ── SPIN-2/SPIN-3: анимация колеса ──
      Ведущий путь — Web Animations API (track.animate): нативный API браузера,
      без библиотек/CDN/сети — работает офлайн так же, как CSS-анимации. JS не
      пишет style.transform каждый кадр. Fallback — requestAnimationFrame от
      timestamp кадра (синхронизирован с repaint; setInterval не используется).
-     Любая отмена (блиц, уход с экрана, новый запуск) гасит анимацию, RAF и
-     запланированные щелчки — двойной finishSpin невозможен. */
+     Любая отмена (блиц, уход с экрана, новый запуск) гасит анимацию, RAF,
+     запланированные щелчки и оба отложенных перехода (reduced-motion finishSpin
+     через 250 мс и openChoice через 700 мс) — двойной finishSpin и открытие
+     выбора поверх чужого экрана невозможны. */
   function dropSpinAnim() {   // снять залившуюся анимацию (fill: forwards держит финал)
     if (state.spinAnim) { try { state.spinAnim.cancel(); } catch {} state.spinAnim = null; }
   }
-  function cancelSpin() {     // полный аборт: анимация + RAF + отложенные щелчки
+  function cancelSpin() {     // полный аборт: анимация + RAF + отложенные щелчки + отложенные переходы
     dropSpinAnim();
     if (state.spinRaf) { cancelAnimationFrame(state.spinRaf); state.spinRaf = null; }
     clearSpinTicks();
+    if (state.spinRmTimer) { clearTimeout(state.spinRmTimer); state.spinRmTimer = null; }
+    if (state.spinChoiceTimer) { clearTimeout(state.spinChoiceTimer); state.spinChoiceTimer = null; }
   }
   function clearSpinTicks() {
     (state.spinTicks || []).forEach(clearTimeout);
@@ -783,7 +790,11 @@
     if (reduced) {
       track.style.transform = `translate(-50%, calc(-50% + ${to}px))`;
       state.spinTicks = [];
-      setTimeout(() => { if (token === state.spinToken) finishSpin(endIdx, rem[chosenIdx], token); }, 250);
+      state.spinRmTimer = setTimeout(() => {
+        state.spinRmTimer = null;                    // SPIN-3: сработал штатно — признак снят
+        if (token !== state.spinToken) return;       // отменено или перезапущено — экран не трогаем
+        finishSpin(endIdx, rem[chosenIdx], token);
+      }, 250);
       return;
     }
 
@@ -849,7 +860,9 @@
     if (winner) winner.classList.add('win');
     vibrate([60, 60, 140]);
     // победитель колеса — единственный источник имени для экрана выбора
-    setTimeout(() => {
+    state.spinChoiceTimer = setTimeout(() => {
+      state.spinChoiceTimer = null;                  // SPIN-3: сработал штатно — признак снят
+      if (token !== state.spinToken) return;         // SPIN-3: уход с экрана/блиц/новый запуск — выбор не открываем
       const ov = $('#spinOverlay');
       ov.classList.add('hidden');
       ov.classList.remove('show');
@@ -2219,5 +2232,11 @@
         setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
       })
       .catch(() => {});
+  }
+
+  // SPIN-3: тестовый крюк для node-тестов (tests/spin-cancel.test.js):
+  // в браузере window.__FANT_TEST__ не выставляется, ветка не выполняется
+  if (window.__FANT_TEST__) {
+    window.__FANT_TEST_API__ = { state, showScreen, spin, cancelSpin };
   }
 })();
