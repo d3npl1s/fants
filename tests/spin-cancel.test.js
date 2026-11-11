@@ -19,22 +19,25 @@ function makeClock() {
       return id;
     },
     clearInterval(id) { clock.timers.delete(id); },
-    // прокрутка виртуального времени: погасить rAF-кадры, затем таймеры по очереди
+    // прокрутка виртуального времени последовательными rAF-кадрами шагом 16 мс
+    // (как repaint браузера): каждый кадр вызывает каждый зарегистрированный
+    // callback ровно один раз, затем исполняются таймеры, чей due наступил
     advance(ms) {
       const end = clock.now + ms;
-      for (;;) {
-        const due = [...clock.timers.entries()]
-          .filter(([, t]) => t.due <= end)
-          .sort((a, b) => a[1].due - b[1].due || a[0] - b[0])[0];
-        if (!due) break;
-        const [id, t] = due;
-        clock.now = Math.max(clock.now, t.due);
+      const FRAME = 16;
+      while (clock.now < end) {
+        clock.now = Math.min(end, clock.now + FRAME);
         clock.fireRaf();
-        if (t.every) { t.due = clock.now + t.every; } else { clock.timers.delete(id); }
-        t.fn();
+        for (;;) {
+          const due = [...clock.timers.entries()]
+            .filter(([, t]) => t.due <= clock.now)
+            .sort((a, b) => a[1].due - b[1].due || a[0] - b[0])[0];
+          if (!due) break;
+          const [id, t] = due;
+          if (t.every) { t.due = clock.now + t.every; } else { clock.timers.delete(id); }
+          t.fn();
+        }
       }
-      clock.now = end;
-      clock.fireRaf();
     }
   };
   return clock;
@@ -149,15 +152,23 @@ defGlobal('setTimeout', (fn, ms) => clock.setTimeout(fn, ms));
 defGlobal('clearTimeout', id => clock.clearTimeout(id));
 defGlobal('setInterval', (fn, ms) => clock.setInterval(fn, ms));
 defGlobal('clearInterval', id => clock.clearInterval(id));
+/* ── rAF: одноразовые кадры, как в браузере ──
+   callback снимается с очереди ДО вызова; зарегистрированные внутри кадра
+   попадают в следующий; cancelAnimationFrame снимает только ещё не
+   исполненный callback. */
+clock.rafQ = new Map();
+clock.rafSeq = 1;
 defGlobal('requestAnimationFrame', fn => {
-  if (!clock.rafQ) clock.rafQ = new Map();
   const id = ++clock.rafSeq;
   clock.rafQ.set(id, fn);
   return id;
 });
-defGlobal('cancelAnimationFrame', id => { if (clock.rafQ) clock.rafQ.delete(id); });
-clock.rafQ = new Map(); clock.rafSeq = 1;
-clock.fireRaf = () => { for (const fn of [...clock.rafQ.values()]) fn(clock.now); };
+defGlobal('cancelAnimationFrame', id => { clock.rafQ.delete(id); });
+clock.fireRaf = () => {
+  const frame = [...clock.rafQ.entries()];   // снимок кадра на начало
+  clock.rafQ.clear();                        // callback одноразовый — снят до вызова
+  for (const [, fn] of frame) fn(clock.now); // новые rAF исполнится в следующем кадре
+};
 defGlobal('history', { pushState() {}, replaceState() {}, state: null });
 defGlobal('location', { protocol: 'http:', hostname: '127.0.0.1' });
 defGlobal('addEventListener', () => {});
@@ -196,6 +207,32 @@ function resetState() {
   vib.length = 0;                                        // счётчики вибрации — на тест
   dom.querySelector('#choiceName').textContent = '';     // DOM-фейки живут между тестами
   dom.querySelector('#spinTrack').animate = dom.trackAnimate;   // после rAF-теста
+  clock.rafQ.clear();                                    // кадры не перетекают между тестами
+}
+
+/* ── 0. Самопроверка harness: rAF одноразовый, вложенный — со следующего кадра ── */
+function testRafMockOneShot() {
+  resetState();
+  let calls = 0, nestedCalls = 0;
+  requestAnimationFrame(() => { calls++; requestAnimationFrame(() => { nestedCalls++; }); });
+  clock.fireRaf();                          // первый кадр: callback снят с очереди и вызван
+  eq(calls, 1, 'raf-mock: callback вызван ровно один раз');
+  eq(nestedCalls, 0, 'raf-mock: вложенный rAF не исполнился в том же кадре');
+  clock.fireRaf();                          // без новой внешней регистрации — вложенный из прошлого кадра
+  eq(calls, 1, 'raf-mock: без новой регистрации callback не повторяется');
+  eq(nestedCalls, 1, 'raf-mock: вложенный rAF исполнился на следующем кадре');
+  clock.fireRaf();                          // ещё кадр — больше ничего не зарегистрировано
+  eq(calls, 1, 'raf-mock: очередь пуста — вызовов больше нет');
+  eq(nestedCalls, 1, 'raf-mock: очередь пуста — вложенных вызовов больше нет');
+  const id = requestAnimationFrame(() => { calls++; });
+  cancelAnimationFrame(id);
+  clock.fireRaf();
+  eq(calls, 1, 'raf-mock: cancelAnimationFrame снял не исполненный callback');
+  // покадровый advance: не исполненный дважды callback не задваивается
+  let adv = 0;
+  requestAnimationFrame(() => { adv++; });
+  clock.advance(50);                        // ~3 кадра по 16 мс
+  eq(adv, 1, 'raf-mock: advance вызвал callback один раз на все кадры');
 }
 
 /* ── 1. Reduced motion: уход до истечения 250 мс — finishSpin не вызывается ── */
@@ -317,6 +354,7 @@ async function testTokenGuardOnStaleChoiceTimer() {
 }
 
 (async () => {
+  testRafMockOneShot();
   testReducedMotionLeaveBefore250();
   testReducedMotionSuccess();
   await testWaapiChoiceWindowLeave();
