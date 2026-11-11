@@ -27,7 +27,7 @@
     <div class="main-inner">
       <svg class="main-crown" viewBox="0 0 120 120"><rect x="30" y="16" width="60" height="60" rx="14" fill="#fff"/><path d="M44 52 40 26l14 10 6-14 6 14 14-10-4 26z" fill="none" stroke="#21265c" stroke-width="4" stroke-linejoin="round"/><path d="M44 52h32v6c0 5-4 9-9 9H53c-5 0-9-4-9-9z" fill="#21265c"/></svg>
       <h1>Фанты</h1>
-      <p class="main-tag">Пати-игры для компании:<br>правда или действие и продолжи фразу</p>
+      <p class="main-tag">Пати-игры для компании:<br>фанты, фразы и рисунки по памяти</p>
       <button class="play-btn big" id="mainStartBtn"><span>Начать</span><i class="chev">›</i></button>
     </div>
     <p class="main-ver" id="mainVersion">версия 1.5 · сделано для своих, некоммерческое</p>
@@ -178,6 +178,139 @@
         <button class="play-btn big" id="phraseAgainBtn"><span>Ещё круг</span><i class="chev">›</i></button>
         <button class="ghost-btn" id="phraseSettingsBtn">Настройки игры</button>
         <button class="ghost-btn" id="phraseGamesBtn">К выбору игр</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 3в: настройки «Нарисуй по памяти» ══════════ -->
+  <section class="screen screen-dm-setup" id="screen-dm-setup">
+    <button class="corner-back" id="dmSetupBack" aria-label="К выбору игры">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="phrase-setup-inner">
+      <h2 class="setup-title">Нарисуй по памяти</h2>
+      <p class="setup-sub">Все слушают слова и зарисовывают каждое в свою ячейку. Затем — угадайте чужие рисунки.</p>
+
+      <div class="ph-field important">
+        <label>Слов от каждого игрока</label>
+        <div class="mode-chips" id="dmPerChips"></div>
+        <div class="stepper dm-stepper">
+          <button id="dmPerMinus" aria-label="Меньше слов">−</button>
+          <b id="dmPerValue">3</b>
+          <button id="dmPerPlus" aria-label="Больше слов">＋</button>
+        </div>
+      </div>
+
+      <div class="ph-field">
+        <label>Темп чтения</label>
+        <div class="mode-chips" id="dmPaceChips"></div>
+        <input type="range" id="dmRateRange" class="dm-range" min="0.5" max="1.5" step="0.05" value="1" aria-label="Скорость чтения слов">
+        <p class="ph-mode-tag" id="dmRateTag"></p>
+      </div>
+
+      <div class="ph-field">
+        <label>Пауза между словами</label>
+        <input type="range" id="dmPauseRange" class="dm-range" min="0" max="3" step="0.25" value="1" aria-label="Пауза между словами, секунд">
+        <p class="ph-mode-tag" id="dmPauseTag"></p>
+      </div>
+
+      <div class="ph-field">
+        <label>Время дорисовать после слов</label>
+        <div class="mode-chips" id="dmDrawChips"></div>
+      </div>
+
+      <div class="dm-warn hidden" id="dmTtsWarn"></div>
+      <p class="dm-total" id="dmTotalLine"></p>
+
+      <div class="setup-actions">
+        <button class="play-btn big" id="dmStartBtn"><span>Подготовиться</span><i class="chev">›</i></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 4в: слушаем слова (и пауза раунда) ══════════ -->
+  <section class="screen screen-dm-listen" id="screen-dm-listen">
+    <button class="corner-back" id="dmListenBack" aria-label="Выйти из раунда">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="dm-listen-inner">
+      <p class="ph-progress" id="dmListenProgress">Приготовьтесь</p>
+      <div class="dm-big-num" id="dmBigNum">?</div>
+      <div class="dm-eq off" id="dmEq" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p class="dm-note" id="dmListenNote"></p>
+      <div class="dm-listen-actions">
+        <button class="play-btn big" id="dmListenBtn"><span>Начать отсчёт</span><i class="chev">›</i></button>
+        <button class="ghost-btn hidden" id="dmNewRoundBtn">Начать новый раунд</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 5в: время дорисовать ══════════ -->
+  <section class="screen screen-dm-draw" id="screen-dm-draw">
+    <button class="corner-back" id="dmDrawBack" aria-label="Выйти из раунда">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="dm-listen-inner">
+      <p class="ph-progress">Дорисуйте рисунки</p>
+      <div class="dm-big-num dm-timer" id="dmDrawTime">0:30</div>
+      <p class="dm-note">Закончите рисунки. Писать буквы по-прежнему нельзя.</p>
+      <div class="dm-listen-actions">
+        <button class="done-btn wide" id="dmToChecksBtn">К проверке ›</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 6в: список проверок ══════════ -->
+  <section class="screen screen-dm-checks" id="screen-dm-checks">
+    <button class="corner-back" id="dmChecksBack" aria-label="Выйти из раунда">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="dm-checks-inner">
+      <p class="ph-progress" id="dmChecksProgress">Проверки: 0 из 0</p>
+      <div class="dm-scores-line" id="dmScoresLine"></div>
+      <div class="dm-cards" id="dmCardsList"></div>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 7в: одна проверка ══════════ -->
+  <section class="screen screen-dm-check" id="screen-dm-check">
+    <button class="corner-back" id="dmCheckBack" aria-label="К списку проверок">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="dm-check-inner">
+      <p class="ph-progress" id="dmCheckHead">Вопрос</p>
+      <p class="dm-note" id="dmCheckHint"></p>
+      <div class="dm-nums" id="dmNums"></div>
+      <p class="dm-question hidden" id="dmCheckQuestion"></p>
+      <div class="dm-reveal-box hidden" id="dmRevealBox">
+        <p class="dm-reveal-label">Под номером <b id="dmRevealNum"></b> было слово</p>
+        <p class="dm-reveal-word" id="dmRevealWord"></p>
+      </div>
+      <p class="dm-result-line hidden" id="dmResultLine"></p>
+      <div class="dm-check-actions">
+        <button class="done-btn wide hidden" id="dmRevealBtn">Показать исходное слово</button>
+        <div class="dm-verdict hidden" id="dmVerdictRow">
+          <button class="dm-v-btn a" id="dmPointAnswerer">Очко отвечающему</button>
+          <button class="dm-v-btn q" id="dmPointAsker">Очко задающему</button>
+          <button class="dm-v-btn n" id="dmPointNone">Никому</button>
+        </div>
+        <button class="ghost-btn dm-undo hidden" id="dmUndoBtn">Отменить результат</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Экран 8в: итоги раунда ══════════ -->
+  <section class="screen" id="screen-dm-results">
+    <div class="phrase-setup-inner">
+      <h2 class="setup-title" id="dmResultsTitle">Раунд завершён</h2>
+      <div id="dmResultsTable" class="ph-results"></div>
+      <p class="ph-loser" id="dmWinnerLine"></p>
+      <button class="ghost-btn" id="dmHistToggle">История проверок</button>
+      <div id="dmHistory" class="dm-history hidden"></div>
+      <div class="setup-actions ph-actions-col">
+        <button class="play-btn big" id="dmAgainBtn"><span>Сыграть ещё раз</span><i class="chev">›</i></button>
+        <button class="ghost-btn" id="dmSetupBtn">Настройки режима</button>
+        <button class="ghost-btn" id="dmGamesBtn">К выбору игр</button>
       </div>
     </div>
   </section>
@@ -346,6 +479,8 @@
 <script src="js/data.js?v=1.5"></script>
 <script src="js/combo-data.js?v=1.5"></script>
 <script src="js/phrase-data.js?v=1.5"></script>
+<script src="js/draw-memory-data.js?v=1.5"></script>
+<script src="js/draw-memory-core.js?v=1.5"></script>
 <script src="js/app.js?v=1.5"></script>
 </body>
 </html>
