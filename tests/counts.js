@@ -6,9 +6,9 @@ module.exports = {
   tasks: {
     'fun.truth': 56, 'fun.action': 55,
     'soft.truth': 68, 'soft.action': 92,
-    'hot.truth': 40, 'hot.action': 51
+    'hot.truth': 43, 'hot.action': 58
   },
-  baseTotal: 362,        // сумма tasks — как в README
+  baseTotal: 372,        // сумма tasks — как в README
   packs: 34,             // задания во всех пакетах суммарно
   phrases: { friendly: 85, names: 75, dark: 55 },
   phrasesTotal: 215      // сумма phrases — как в README
