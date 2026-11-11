@@ -1840,7 +1840,7 @@
     $('#dmWinnerLine').innerHTML = winners.length
       ? (winners.length === 1
         ? 'Победитель: <b>' + esc(winners[0].nm) + '</b> — ' + max + ' ' + DMC.plural(max, ['очко', 'очка', 'очков'])
-        : 'Победители: <b>' + winners.map(w => esc(w.nm)).join(' и ') + '</b> — по ' + max + ' ' + DMC.plural(max, ['очку', 'очка', 'очков']))
+        : 'Победители: <b>' + winners.slice(0, -1).map(w => esc(w.nm)).join(', ') + ' и ' + esc(winners[winners.length - 1].nm) + '</b> — по ' + max + ' ' + DMC.plural(max, ['очку', 'очка', 'очков']))
       : 'Ни одного очка — победителя нет';
     $('#dmHistory').classList.add('hidden');
     $('#dmHistToggle').textContent = 'История проверок';
