@@ -1,7 +1,7 @@
 /* Фанты — офлайн-кеш */
 // Единая точка версии для ассетов: должна совпадать с ?v= в index.html и текстом main-ver.
 // (сборки нет, поэтому константа одна на файл — при бампе правятся только эти три места)
-const VERSION = '1.6';
+const VERSION = '1.7';
 const CACHE = 'fant-v' + VERSION;
 // предзакеш идёт с тем же ?v=, что и запросы из index.html:
 // caches.match сравнивает URL вместе с query — без версии ассет не найдётся
@@ -9,7 +9,7 @@ const withV = u => (u.endsWith('/') || u.endsWith('.html') ? u : u + '?v=' + VER
 // ядро: без него офлайн невозможен — addAll атомарен, эти файлы обязаны существовать
 const CORE = [
   './', './index.html',
-  './css/style.css', './js/lang.js', './js/data.js', './js/combo-data.js', './js/phrase-data.js',
+  './css/style.css', './css/desktop.css', './js/lang.js', './js/data.js', './js/combo-data.js', './js/phrase-data.js',
   './js/draw-memory-data.js', './js/draw-memory-core.js', './js/app.js'
 ].map(withV);
 // остальное (иконки, шрифты): один 404 не должен ломать установку SW целиком
