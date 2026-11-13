@@ -49,8 +49,11 @@
   display: flex; flex-direction: column; align-items: center; gap: 14px;
   width: 100%; max-width: 420px;
 }
-.spy-pass-title { font-size: 30px; font-weight: 800; line-height: 1.3; text-shadow: 0 4px 0 rgba(0, 0, 0, .18); }
-.spy-pass-note { font-size: 15px; font-weight: 600; opacity: .95; line-height: 1.5; }
+.spy-pass-title {
+  font-size: 30px; font-weight: 800; line-height: 1.3; text-shadow: 0 4px 0 rgba(0, 0, 0, .18);
+  text-wrap: balance; overflow-wrap: anywhere;   /* «Телефон у Анны-Марии» — без сирот и без гориз. скролла */
+}
+.spy-pass-note { font-size: 15px; font-weight: 600; opacity: .95; line-height: 1.5; text-wrap: balance; }
 
 /* ── секретная карточка роли ── */
 .spy-card {
@@ -75,7 +78,10 @@
 .spy-card-note { font-size: 14px; font-weight: 600; opacity: .92; line-height: 1.45; }
 
 /* ── круг рисования и обсуждение ── */
-.spy-drawer { font-size: 40px; font-weight: 800; line-height: 1.2; text-shadow: 0 5px 0 rgba(0, 0, 0, .18); padding: 0 12px; }
+.spy-drawer {
+  font-size: 40px; font-weight: 800; line-height: 1.2; text-shadow: 0 5px 0 rgba(0, 0, 0, .18); padding: 0 12px;
+  text-wrap: balance; overflow-wrap: anywhere;   /* «Рисует: Денис» одной строкой; длинный ник переносится, не скроллится */
+}
 .spy-note {
   font-size: 16px; font-weight: 700; opacity: .95;
   padding: 6px 18px; border-radius: 18px; background: rgba(33, 38, 92, .55); box-shadow: var(--shadow);
@@ -89,13 +95,13 @@
 .spy-guess-btn { align-self: center; border-style: solid; border-color: rgba(255, 255, 255, .5); background: rgba(24, 27, 66, .4); }
 .spy-actions .done-btn:disabled, .spy-ballot .done-btn:disabled { opacity: .55; filter: grayscale(.5); }
 
-/* ── бюллетень тайного голосования и попытки шпиона ── */
+/* ── бюллетень тайного голосования ── */
 .spy-ballot {
   display: flex; flex-direction: column; align-items: stretch; gap: 14px;
   width: 100%; max-width: 440px; background: rgba(24, 27, 66, .55);
   border-radius: 22px; padding: 22px 18px; box-shadow: var(--shadow);
 }
-.spy-ballot-for { text-align: center; font-size: 18px; font-weight: 800; line-height: 1.35; }
+.spy-ballot-for { text-align: center; font-size: 18px; font-weight: 800; line-height: 1.35; text-wrap: balance; }
 .spy-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .spy-chips button {
   border: 2px solid rgba(255, 255, 255, .4); background: rgba(33, 38, 92, .5); color: #fff;
@@ -112,12 +118,24 @@
   white-space: nowrap;
   word-break: normal;
 }
-.spy-guess-input {
-  width: 100%; height: 56px; border: none; border-radius: 14px; padding: 0 16px;
-  font-family: inherit; font-size: 19px; font-weight: 800; color: var(--navy);
-  background: rgba(255, 255, 255, .95); outline: none; box-shadow: var(--shadow);
+
+/* ── экран коллективного вердикта о попытке шпиона ── */
+.spy-verdict {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  width: 100%; max-width: 440px; background: rgba(24, 27, 66, .55);
+  border-radius: 22px; padding: 24px 18px; box-shadow: var(--shadow);
 }
-.spy-guess-input::placeholder { color: #5f6795; font-weight: 500; }
+.spy-verdict-title {
+  font-size: 30px; font-weight: 800; line-height: 1.25;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, .18);
+}
+.spy-verdict-note { font-size: 15px; font-weight: 600; opacity: .95; line-height: 1.5; text-wrap: balance; }
+/* вердикт необратим: кнопки различимы цветом и подписью, между ними зазор,
+   каждая — полная ширина карточки (высокая, легко попасть пальцем) */
+.spy-verdict-btns { display: flex; flex-direction: column; gap: 14px; width: 100%; margin-top: 2px; }
+.spy-verdict-yes { background: #2e7d32; }
+.spy-verdict-no { background: #c2185b; }
+.spy-verdict-hint { font-size: 13px; font-weight: 600; opacity: .85; line-height: 1.45; text-wrap: balance; }
 
 /* ── итог голосования и финал ── */
 .spy-vr-box {
@@ -125,7 +143,10 @@
   background: rgba(24, 27, 66, .55); border-radius: 18px; padding: 20px 22px;
   box-shadow: var(--shadow); width: 100%; max-width: 460px;
 }
-.spy-vr-title { font-size: 26px; font-weight: 800; line-height: 1.3; text-align: center; }
+.spy-vr-title {
+  font-size: 26px; font-weight: 800; line-height: 1.3; text-align: center;
+  text-wrap: balance; overflow-wrap: anywhere;   /* «Анна-Мария выбывает» — сбалансированные строки без сирот */
+}
 .spy-vr-note { font-size: 15px; font-weight: 600; opacity: .95; line-height: 1.5; text-align: center; }
 .spy-final-why { margin: 2px 0 6px; }
 .spy-reveal-line { font-size: 18px; font-weight: 600; text-align: left; }
@@ -137,7 +158,7 @@
   .spy-pass-title { font-size: 34px; }
   .spy-drawer { font-size: 48px; }
   .spy-card-word { font-size: 46px; }
-  .spy-card, .spy-ballot, .spy-vr-box { max-width: 520px; }
+  .spy-card, .spy-ballot, .spy-verdict, .spy-vr-box { max-width: 520px; }
   .spy-pass-box { max-width: 460px; }
   .spy-actions { max-width: 420px; }
 }
@@ -149,4 +170,14 @@
   .spy-drawer { font-size: 28px; }
   .spy-card-word { font-size: 26px; }
   .spy-card { padding: 14px 16px; gap: 8px; }
+  .spy-verdict { padding: 14px 16px; gap: 10px; }
+  .spy-verdict-title { font-size: 22px; }
+}
+
+/* ── узкие экраны (320px): заголовки меньше, но имена не обрезаются ── */
+@media (max-width: 359px) {
+  .spy-pass-title { font-size: 24px; }
+  .spy-drawer { font-size: 30px; }
+  .spy-verdict-title { font-size: 24px; }
+  .spy-verdict { padding: 18px 14px; }
 }
