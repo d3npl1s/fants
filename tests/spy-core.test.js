@@ -324,61 +324,104 @@ for (let seed = 1; seed <= 40; seed++) {
   ok(SC.continueAfterVote(g), 'continueAfterVote завершает партию');
   eq(g.phase, 'finished', 'фаза finished');
   ok(!SC.continueAfterVote(g), 'повторный continue — отказ');
-  ok(!SC.makeGuess(g, 'Даша', g.word), 'после финала попытка невозможна');
+  ok(!SC.resolveSpyGuess(g, true), 'после финала вердикт невозможен');
+  ok(!SC.resolveSpyGuess(g, false), 'после финала вердикт (ошибся) — отказ');
 }
 
-/* ═══ §11: попытка шпиона назвать слово ═══ */
+/* ═══ §11: коллективный вердикт на попытку шпиона (SPY-VERDICT, 1.8.3) ═══ */
 {
   const g = catspy(R4, 1);                    // шпион «Борис», слово «кот»
   eq(g.word, 'кот', 'слово зафиксировано');
-  ok(!SC.makeGuess(g, 'Борис', 'кот'), 'в reveal попытка недоступна (роли ещё не раздались)');
+  ok(!SC.resolveSpyGuess(g, true), 'в reveal вердикт недоступен (роли ещё не раздались)');
+  eq(g.phase, 'reveal', 'фаза не изменилась');
   SC.startGame(g);
-  ok(SC.makeGuess(g, 'Борис', '  КОТ '), 'верная попытка принята');
+  ok(SC.resolveSpyGuess(g, true), 'вердикт «Да, угадал» обработан');
   eq(g.scores['Борис'], 2, 'шпиону ровно +2');
-  eq(g.scores['Аня'], 0, 'остальным ничего');
+  eq(g.scores['Аня'], 0, 'остальным за саму попытку ничего');
+  eq(g.scores['Вика'], 0, 'второму мирному ничего');
+  eq(g.scores['Глеб'], 0, 'третьему мирному ничего');
   eq(g.phase, 'finished', 'партия завершена');
   ok(g.result && g.result.outcome === 'spy-guessed', 'исход spy-guessed');
+  eq(g.result.spy, 'Борис', 'в результате имя шпиона');
   eq(g.result.word, 'кот', 'в результате слово');
-  ok(!SC.makeGuess(g, 'Борис', 'кот'), 'повторная попытка — отказ');
+  eq(g.result.category, { id: 'animals', name: 'Животные' }, 'в результате категория');
+  ok(!SC.resolveSpyGuess(g, true), 'повторный вердикт — отказ');
+  eq(g.scores['Борис'], 2, 'повторное разрешение не начисляет очки');
+  ok(g.result && g.result.outcome === 'spy-guessed', 'результат не изменился');
 }
 {
   const g = catspy(R4, 1);
   SC.startGame(g);
   ok(SC.completeDrawTurn(g, SC.getCurrentDrawer(g)), 'ход рисования сделан');
-  ok(SC.makeGuess(g, 'Борис', 'собака'), 'неверная попытка принята — и завершает партию');
-  eq(g.scores['Борис'], 0, 'шпион не получил очков');
+  ok(SC.resolveSpyGuess(g, false), 'вердикт «Нет, ошибся» обработан в фазе draw');
+  eq(g.scores['Борис'], 0, 'шпиону за саму попытку ничего');
   eq(g.scores['Аня'], 1, 'мирному +1');
   eq(g.scores['Вика'], 1, 'второму мирному +1');
   eq(g.scores['Глеб'], 1, 'третьему мирному +1');
   ok(g.result && g.result.outcome === 'spy-wrong-guess', 'исход spy-wrong-guess');
+  eq(g.result.spy, 'Борис', 'в результате имя шпиона');
+  eq(g.result.word, 'кот', 'в результате слово');
   eq(g.phase, 'finished', 'партия завершена');
+  ok(!SC.resolveSpyGuess(g, false), 'повторный вердикт — отказ');
+  eq(g.scores['Аня'], 1, 'повторное разрешение не начисляет очки');
 }
 {
-  const g = catspy(R4, 1);
-  SC.startGame(g);
-  ok(!SC.makeGuess(g, 'Борис', '   '), 'пустая попытка — отказ');
-  ok(!SC.makeGuess(g, 'Борис', ''), 'пустая строка — отказ');
-  eq(g.phase, 'draw', 'пустая попытка партию не тратит');
-}
-
-/* ═══ §12: не-шпион не может вызвать проверку, состояние не меняется ═══ */
-{
-  const g = catspy(R4, 1);                    // шпион «Борис»
-  SC.startGame(g);
-  const snap = JSON.stringify(g);
-  ok(!SC.makeGuess(g, 'Аня', 'кот'), 'не-шпион не запускает проверку');
-  eq(JSON.stringify(g), snap, 'состояние не изменилось');
-  ok(!SC.makeGuess(g, 'Зюзя', 'кот'), 'неизвестный игрок — отказ');
-  ok(!SC.makeGuess(g, null, 'кот'), 'null-имя — отказ');
-  eq(JSON.stringify(g), snap, 'состояние по-прежнему не изменилось');
-}
-{
+  // выбывшие ранее в этой же партии тоже +1 при неверном вердикте;
+  // очки за предыдущие круги сохраняются и суммируются с очками попытки
   const g = catspy(R5, 4);                    // шпион «Даша»
   SC.startGame(g); finishDrawing(g);
-  voteOut(g, 'Борис');
-  SC.continueAfterVote(g);
-  ok(!SC.makeGuess(g, 'Борис', g.word), 'выбывший мирный не делает попыток');
-  eq(g.phase, 'draw', 'партия не изменилась');
+  voteOut(g, 'Борис');                        // ошибочное изгнание: Даша +1
+  eq(g.scores['Даша'], 1, 'шпион +1 за ошибочное изгнание');
+  SC.continueAfterVote(g); finishDrawing(g); SC.openVote(g);
+  ok(SC.castVote(g, 'Аня', null), 'часть голосов отдана — вердикт можно прервать');
+  ok(SC.resolveSpyGuess(g, false), 'неверный вердикт в фазе vote обработан');
+  eq(g.scores['Даша'], 1, 'шпион: +1 за круг, за попытку ничего');
+  eq(g.scores['Борис'], 1, 'ранее выбывший мирный тоже +1');
+  eq(g.scores['Аня'], 1, 'живой мирный +1');
+  eq(g.scores['Вика'], 1, 'второй живой мирный +1');
+  eq(g.scores['Глеб'], 1, 'третий живой мирный +1');
+  ok(g.result && g.result.outcome === 'spy-wrong-guess', 'исход spy-wrong-guess');
+}
+{
+  // каждый из допустимых фазовых вызовов работает
+  const g1 = catspy(R4, 1); SC.startGame(g1);
+  ok(SC.resolveSpyGuess(g1, true) && g1.phase === 'finished', 'вердикт в draw работает');
+  const g2 = catspy(R4, 1); SC.startGame(g2); finishDrawing(g2);
+  eq(g2.phase, 'discussion', 'достигнута фаза discussion');
+  ok(SC.resolveSpyGuess(g2, true) && g2.phase === 'finished', 'вердикт в discussion работает');
+  const g3 = catspy(R4, 1); SC.startGame(g3); finishDrawing(g3); SC.openVote(g3);
+  ok(SC.resolveSpyGuess(g3, true) && g3.phase === 'finished', 'вердикт в vote работает');
+  const g4 = catspy(R4, 1); SC.startGame(g4); finishDrawing(g4);
+  voteAllSkip(g4);
+  eq(g4.phase, 'vote-result', 'достигнута фаза vote-result');
+  ok(SC.resolveSpyGuess(g4, true) && g4.phase === 'finished', 'вердикт в vote-result работает');
+}
+
+/* ═══ §12: отказы resolveSpyGuess — фазы, типы, некорректная партия ═══ */
+{
+  const g = catspy(R4, 1);                    // шпион «Борис»
+  ok(!SC.resolveSpyGuess(null, true), 'null-партия — отказ');
+  ok(!SC.resolveSpyGuess(undefined, false), 'undefined-партия — отказ');
+  ok(!SC.resolveSpyGuess({ players: [], phase: 'draw' }, true), 'некорректная партия без счёта — отказ');
+  ok(!SC.resolveSpyGuess(g, true), 'reveal — отказ');
+  eq(g.phase, 'reveal', 'фаза не изменилась');
+  SC.startGame(g);
+  const snap = JSON.stringify(g);
+  [undefined, null, '', 'true', 'false', 'да', 0, 1, 2, NaN, {}, { correct: true }, [], [true]].forEach(v => {
+    const lbl = v === undefined ? 'undefined' : JSON.stringify(v);
+    ok(!SC.resolveSpyGuess(g, v), `isCorrect ${lbl} — отказ (только boolean)`);
+  });
+  eq(JSON.stringify(g), snap, 'состояние не изменилось при отказах');
+  ok(SC.resolveSpyGuess(g, false), 'после отказов корректный вердикт принимается');
+  eq(g.phase, 'finished', 'партия завершена');
+  ok(!SC.resolveSpyGuess(g, true), 'вызов из finished — отказ');
+  ok(!SC.resolveSpyGuess(g, false), 'вызов из finished (false) — отказ');
+  eq(g.scores['Аня'], 1, 'очки после всех отказов — от единственного вердикта');
+  eq(g.scores['Борис'], 0, 'шпион не начислил очки на отказах');
+}
+{
+  // deprecated makeGuess ещё экспортирован (app.js ветки 1.8.2 его вызывает) — снимут на интеграции
+  ok(typeof SC.makeGuess === 'function', 'makeGuess ещё экспортирован (deprecated, удаление на интеграции)');
 }
 
 /* ═══ §13: вращение очереди; выбывшие не рисуют (drawOrder зафиксирован скриптом) ═══ */
@@ -450,9 +493,9 @@ const OUTCOMES = ['spy-caught', 'spy-guessed', 'spy-wrong-guess', 'spy-auto-win'
 
 /* стратегия по seed % 3: 0 — пропуск по нечётным кругам, изгнание по чётным;
    1 — изгнание первого мирного каждый круг; 2 — круг 1 пропуск, дальше топим шпиона.
-   opts.guess: 'correct'/'wrong' — после первого голосования шпион называет слово. */
+   opts.verdict: 'correct'/'wrong' — после первого голосования коллективный вердикт. */
 function playToEnd(seed, n, mode, opts = {}) {
-  const label = `s${seed}/n${n}/${mode}${opts.guess ? `/guess-${opts.guess}` : ''}`;
+  const label = `s${seed}/n${n}/${mode}${opts.verdict ? `/verdict-${opts.verdict}` : ''}`;
   const roster = R12.slice(0, n);
   const g = SC.createGame(roster, mode, DATA, rng(seed));
   const drawOrderSnap = JSON.stringify(g.drawOrder);
@@ -473,7 +516,7 @@ function playToEnd(seed, n, mode, opts = {}) {
       votesHeld++;
       const strategy = seed % 3;
       let target = null;                                   // «все пропустили»
-      if (opts.guess && votesHeld === 1) target = null;    // первый круг — пропуск, затем попытка
+      if (opts.verdict && votesHeld === 1) target = null;  // первый круг — пропуск, затем вердикт
       else if (strategy === 2 && g.round >= 2) target = g.spy;
       else if (strategy !== 0 || g.round % 2 === 0) target = g.alive.find(p => p !== g.spy);
       for (const v of g.alive.slice()) {
@@ -485,9 +528,8 @@ function playToEnd(seed, n, mode, opts = {}) {
       continue;
     }
     if (g.phase === 'vote-result') {
-      if (opts.guess && votesHeld >= 1 && !g.result) {
-        const text = opts.guess === 'correct' ? g.word : 'совершенно не то слово';
-        ok(SC.makeGuess(g, g.spy, text), `${label}: попытка шпиона на vote-result`);
+      if (opts.verdict && votesHeld >= 1 && !g.result) {
+        ok(SC.resolveSpyGuess(g, opts.verdict === 'correct'), `${label}: коллективный вердикт на vote-result`);
         continue;
       }
       ok(SC.continueAfterVote(g), `${label}: continue после r${g.round}`);
@@ -531,12 +573,12 @@ for (let seed = 1; seed <= 24; seed++) {
     }
   }
 }
-for (const guess of ['correct', 'wrong']) {
+for (const verdict of ['correct', 'wrong']) {
   for (let seed = 1; seed <= 6; seed++) {
     for (const n of [4, 6]) {
-      const g = playToEnd(seed, n, 'normal', { strategy: 0, guess });
-      ok(g.result.outcome === (guess === 'correct' ? 'spy-guessed' : 'spy-wrong-guess'),
-        `s${seed}/n${n}/guess-${guess}: исход через попытку шпиона`);
+      const g = playToEnd(seed, n, 'normal', { strategy: 0, verdict });
+      ok(g.result.outcome === (verdict === 'correct' ? 'spy-guessed' : 'spy-wrong-guess'),
+        `s${seed}/n${n}/verdict-${verdict}: исход через коллективный вердикт`);
     }
   }
 }
@@ -564,13 +606,17 @@ for (const guess of ['correct', 'wrong']) {
   eq(SC.votesCast(g2), 1, 'votesCast: собственные ключи считаются');
 }
 
-/* ═══ SPY-INT (интеграция 05): каждый метод SPYC, используемый UI, экспортирован ═══ */
+/* ═══ SPY-INT (интеграция 05) + SPY-VERDICT (1.8.3): каждый метод SPYC, используемый UI, экспортирован ═══ */
 {
+  // makeGuess — deprecated: ещё вызывается app.js ветки 1.8.2, снимается
+  // на интеграции вместе с переходом UI на resolveSpyGuess
   const usedByUI = ['createGame', 'startGame', 'getCurrentDrawer', 'completeDrawTurn',
-    'openVote', 'castVote', 'votesCast', 'resolveVote', 'continueAfterVote', 'makeGuess', 'normalizeWord'];
+    'openVote', 'castVote', 'votesCast', 'resolveVote', 'continueAfterVote',
+    'resolveSpyGuess', 'makeGuess', 'normalizeWord'];
   for (const m of usedByUI) {
     ok(typeof SC[m] === 'function', `экспорт: SPY_CORE.${m} — функция`);
   }
+  ok(SC.resolveSpyGuess.length === 2, 'сигнатура: resolveSpyGuess(game, isCorrect) — два параметра');
 }
 
 /* ═══ SPY-SCORE (04, решение владельца): очки — только внутри одной партии ═══ */

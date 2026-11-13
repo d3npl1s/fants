@@ -3,6 +3,13 @@
    ведёт только роли, порядок штрихов, голосование, попытку шпиона назвать
    слово и счёт. Источник правил — docs 04-GAME-RULES.md (ссылки § ниже).
 
+   SPY-VERDICT (1.8.3, решение владельца): попытка шпиона — коллективный
+   вердикт остальных игроков. Шпион произносит слово вслух, остальные решают
+   двумя кнопками: resolveSpyGuess(game, true) — «Да, угадал» (+2 шпиону),
+   resolveSpyGuess(game, false) — «Нет, ошибся» (шпион раскрыт, всем остальным
+   +1). Ручного ввода слова и сравнения текста с секретным словом больше нет —
+   ядро получает готовый вердикт и само начисляет очки и пишет result.
+
    createGame возвращает новый объект партии, остальные функции меняют
    переданный объект и возвращают признак успеха (true/false) или запись
    голосования (resolveVote), либо null/false при некорректном вызове —
@@ -54,8 +61,9 @@
     return arr;
   }
 
-  /* ── нормализация ответа шпиона: регистр, ё/е, края, повторные пробелы.
-     Никакого fuzzy matching — точное сравнение после нормализации (04 §6) ── */
+  /* ── нормализация слова: регистр, ё/е, края, повторные пробелы.
+     В активном механизме попытки (resolveSpyGuess) сравнения текста больше нет;
+     остаётся для deprecated makeGuess и утилитарных нужд ── */
   function normalizeWord(text) {
     return String(text == null ? '' : text)
       .toLowerCase()
@@ -300,9 +308,39 @@
     return true;
   }
 
-  /* ── попытка шпиона назвать слово (04 §6): доступна в любой момент после
-     раздачи ролей до конца партии; одна попытка — любой исход завершает партию.
-     Отказ для не-шпиона не раскрывает роль ── */
+  /* ── SPY-VERDICT (1.8.3): коллективный вердикт остальных игроков на попытку
+     шпиона (04 §6, решение владельца; см. 01-SHARED-BRIEF). Шпион произносит
+     слово вслух, остальные решают: isCorrect === true — «Да, угадал»,
+     false — «Нет, ошибся». Ядро — единственный источник истины по исходу
+     и счёту: UI только вызывает API и открывает финал по результату.
+
+     Контракт: только фазы draw/discussion/vote/vote-result (в reveal ролей ещё
+     нет, после финала — поздно); isCorrect — строго boolean; отказ при пустой/
+     некорректной партии, завершённой партии или неверном типе — false, партия
+     не меняется. Одна попытка на партию: любой вердикт завершает партию,
+     повторный вызов после финала отклоняется без второго начисления (04 §6). */
+  function resolveSpyGuess(game, isCorrect) {
+    if (!inPhase(game, 'draw', 'discussion', 'vote', 'vote-result')) return false;
+    if (game.result) return false;
+    if (typeof isCorrect !== 'boolean') return false;
+    if (!game.scores || !game.spy || !Array.isArray(game.players)) return false;
+    if (isCorrect) {
+      game.scores[game.spy] += 2;         // верно: шпиону ровно +2 (04 §7)
+      game.result = { v: 1, outcome: 'spy-guessed', spy: game.spy, word: game.word, category: game.category };
+    } else {
+      /* ошибся: шпион раскрыт, каждому другому участнику +1 — включая
+         выбывших ранее в этой же партии (04 §7) */
+      game.players.forEach(p => { if (p !== game.spy) game.scores[p]++; });
+      game.result = { v: 1, outcome: 'spy-wrong-guess', spy: game.spy, word: game.word, category: game.category };
+    }
+    game.phase = 'finished';
+    return true;
+  }
+
+  /* deprecated: заменяется resolveSpyGuess, удаление на интеграции.
+     Старый ручной механизм (имя выкрикнувшего + ввод слова) — ещё вызывается
+     app.js ветки 1.8.2; на интеграции UI переходит на resolveSpyGuess,
+     и эта функция снимается вместе со сравнением введённого текста. */
   function makeGuess(game, playerName, guessText) {
     if (!inPhase(game, 'draw', 'discussion', 'vote', 'vote-result')) return false;
     if (game.result) return false;
@@ -324,7 +362,8 @@
 
   const SPY_CORE = {
     createGame, startGame, getCurrentDrawer, completeDrawTurn,
-    openVote, castVote, votesCast, resolveVote, continueAfterVote, makeGuess, normalizeWord,
+    openVote, castVote, votesCast, resolveVote, continueAfterVote,
+    resolveSpyGuess, makeGuess, normalizeWord,
   };
   root.SPY_CORE = SPY_CORE;
   if (typeof module !== 'undefined' && module.exports) module.exports = SPY_CORE;
