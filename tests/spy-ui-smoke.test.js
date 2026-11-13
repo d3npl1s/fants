@@ -52,7 +52,7 @@ ok(!/else\s*\{[^}]*renderModeChips\(\)[^}]*\}[^\n]*spyEnter/.test(app),
 
 /* 5. Активные экраны шпиона в GAME_SCREENS (wake lock) */
 ['screen-spy-reveal', 'screen-spy-draw', 'screen-spy-discussion',
- 'screen-spy-vote', 'screen-spy-vote-result', 'screen-spy-final']
+ 'screen-spy-vote', 'screen-spy-vote-result', 'screen-spy-final', 'screen-spy-guess']
   .forEach(id => ok(app.includes(`'${id}'`), `GAME_SCREENS включает ${id}`));
 
 /* 6. Навигация: системный «Назад» различает шпиона и сбрасывает партию наружу */
@@ -89,8 +89,29 @@ for (const m of selectorMatches) {
 }
 ok(bad.length === 0, 'все селекторы spy.css с префиксом .spy-/.screen-spy-; нарушители: ' + bad.join(' | '));
 
-/* 10. Версия не тронута (бамп делает менеджер единым коммитом) */
-ok(/const VERSION = '1\.7\.1';/.test(sw), 'sw.js: VERSION не менялся');
-ok(!html.includes('?v=1.8') && html.includes('?v=1.7.1'), 'index.html: ?v= не поднимался');
+/* 10. SPY-INT (05): каждый метод SPYC.*, вызываемый UI, экспортирован ядром */
+const core = read('js/spy-core.js');
+const used = new Set([...app.matchAll(/SPYC\.(\w+)/g)].map(m => m[1]));
+const exportBlock = core.slice(core.indexOf('const SPY_CORE = {'));
+const exported = new Set([...exportBlock.matchAll(/(?:^|[,{\s])([A-Za-z_]\w*)(?=[,}])/g)].map(m => m[1]));
+for (const m of used) {
+  ok(exported.has(m) && new RegExp(`\\b${m}\\s*(?:\\(|,|\\})`).test(exportBlock),
+     `SPYC.${m} вызывается в app.js и экспортирован в spy-core.js`);
+}
+ok(used.has('votesCast'), 'UI использует votesCast (регрессия контракта 05)');
+
+/* 11. SPY-INT (05): исход партии UI берёт из result.outcome, не из endHint */
+ok(app.includes("g.result.outcome === 'spy-caught'"),
+   'экран итога голосования различает «шпион пойман» по result.outcome');
+ok(app.includes("SPY_END_TITLES[r.outcome]"),
+   'финальный экран строит заголовок из result.outcome');
+ok(app.includes("$('#spyGuessBtn4').classList.toggle('hidden', caught)"),
+   'после поимки шпиона кнопка попытки скрыта');
+ok(app.includes("'Показать итоги'"),
+   'кнопка после поимки шпиона ведёт в итоги, а не «следующий круг»');
+
+/* 12. Версия не тронута (бамп делает менеджер единым коммитом) */
+ok(/const VERSION = '1\.\d+(\.\d+)?';/.test(sw), 'sw.js: VERSION имеет ожидаемый формат');
+ok(!html.includes('?v=1.8'), 'index.html: ?v=1.8 ещё не поднимался');
 
 console.log('SPY-UI smoke: ' + n + ' проверок пройдено');

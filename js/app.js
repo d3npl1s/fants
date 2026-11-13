@@ -2423,14 +2423,20 @@
     const beforeAlive = g.alive.slice();
     try { SPYC.resolveVote(g); } catch { return; }
     spy.ballotOpen = false;
-    if (g.phase === 'finished') spy.endHint = 'spy-caught';   // выбыли шпиона — партия кончена
-    else spy.lastEliminated = beforeAlive.find(p => !g.alive.includes(p)) || null;
+    // SPY-INT (05): источник истины — g.result.outcome. Пойманный шпион даёт
+    // result 'spy-caught' ещё в фазе vote-result: ядро намеренно ждёт continueAfterVote
+    spy.lastEliminated = beforeAlive.find(p => !g.alive.includes(p)) || null;
     spyRenderPhase();
   }
   function spyRenderVoteResult() {
     const g = spy.game;
+    // SPY-INT (05): 'spy-caught' приходит в result.outcome уже на экране итога голосования
+    const caught = !!(g.result && g.result.outcome === 'spy-caught');
     $('#spyVRProgress').textContent = 'Итог голосования · круг ' + g.round;
-    if (spy.lastEliminated) {
+    if (caught) {
+      $('#spyVRTitle').textContent = 'Шпион пойман!';
+      $('#spyVRNote').textContent = 'Голосование указало на шпиона — ' + g.spy + '.';
+    } else if (spy.lastEliminated) {
       // роль выбывшего раскрывается публично; очки в разгар партии не показываем
       $('#spyVRTitle').textContent = spy.lastEliminated + ' выбывает';
       $('#spyVRNote').textContent = 'Это не шпион — партия продолжается.';
@@ -2438,13 +2444,16 @@
       $('#spyVRTitle').textContent = 'Никто не выбывает';
       $('#spyVRNote').textContent = '«Пропустить» набрал больше всех или голоса разделились.';
     }
+    // SPY-INT (05): после поимки шпиона попытка невозможна (шпион выбыл, makeGuess
+    // не примет), а кнопка ведёт в итоги, а не «следующий круг»
+    $('#spyGuessBtn4').classList.toggle('hidden', caught);
+    $('#spyNextRoundBtn').querySelector('span').textContent = caught ? 'Показать итоги' : 'Следующий круг';
   }
   $('#spyNextRoundBtn').addEventListener('click', () => {
     const g = spy.game;
     if (!g || g.phase !== 'vote-result') return;
     try { SPYC.continueAfterVote(g); } catch { return; }
-    if (g.phase === 'finished') spy.endHint = 'spy-auto-win';   // осталось двое
-    spyRenderPhase();
+    spyRenderPhase();   // SPY-INT (05): finished → финал читает result.outcome, endHint не нужен
   });
 
   /* ── попытка шпиона назвать слово (доступна на любых активных фазах) ── */
@@ -2508,10 +2517,9 @@
     const g = spy.game;
     if (!g) return;
     const r = g.result || {};
-    // причину берём из ядра, если она из зафиксированного контракта, иначе — из хода партии
-    const reason = (r.reason === 'spy-guessed' || r.reason === 'spy-wrong-guess')
-      ? r.reason
-      : (spy.endHint || 'spy-caught');
+    // SPY-INT (05): единственный источник истины — result.outcome из ядра;
+    // endHint остаётся только последнимfallback'ом на случай битого result
+    const reason = SPY_END_TITLES[r.outcome] ? r.outcome : (spy.endHint || 'spy-caught');
     $('#spyFinalTitle').textContent = SPY_END_TITLES[reason] || 'Партия завершена';
     $('#spyFinalWhy').textContent = SPY_END_NOTES[reason] || '';
     $('#spyFinalSpy').textContent = g.spy;
@@ -2579,7 +2587,8 @@
   let wakeLock = null;
   const GAME_SCREENS = ['screen-wheel', 'screen-choice', 'screen-reveal', 'screen-phrase-round', 'screen-phrase-task', 'screen-phrase-results',
     'screen-dm-listen', 'screen-dm-draw', 'screen-dm-checks', 'screen-dm-check', 'screen-dm-results',
-    'screen-spy-reveal', 'screen-spy-draw', 'screen-spy-discussion', 'screen-spy-vote', 'screen-spy-vote-result', 'screen-spy-final'];
+    'screen-spy-reveal', 'screen-spy-draw', 'screen-spy-discussion', 'screen-spy-vote', 'screen-spy-vote-result', 'screen-spy-final',
+    'screen-spy-guess'];
   async function keepAwake() {
     try {
       if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
