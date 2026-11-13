@@ -604,24 +604,29 @@
       <button class="set-row set-btn" id="setSoundBtn">
         <span>Звук</span><b id="setSoundState">Вкл</b>
       </button>
-      <button class="set-row set-btn" id="setTtsBtn">
+      <!-- MENU-CTX: режимные пункты помечены data-settings-scope —
+           открытие меню показывает только те, чей скоуп совпадает с активной игрой -->
+      <button class="set-row set-btn" id="setTtsBtn" data-settings-scope="fants">
         <span>Озвучка заданий</span><b id="setTtsState">Вкл</b>
       </button>
-      <div class="set-row punish-edit important">
+      <div class="set-row punish-edit important" data-settings-scope="fants phrase">
         <label for="punishInput">Наказание за провал</label>
         <input id="punishInput" maxlength="60" placeholder="штрафное задание">
       </div>
-      <button class="set-row set-btn" id="setUnbanBtn">
+      <button class="set-row set-btn" id="setUnbanBtn" data-settings-scope="fants">
         <span>Вернуть убранные задания</span>
       </button>
-      <button class="set-row set-btn" id="setChosenResetBtn">
+      <button class="set-row set-btn" id="setChosenResetBtn" data-settings-scope="fants">
         <span>Сбросить историю выпавших</span>
       </button>
-      <button class="set-row set-btn" id="setStatsBtn">
+      <button class="set-row set-btn" id="setStatsBtn" data-settings-scope="fants">
         <span>Статистика фантов</span>
       </button>
       <button class="set-row set-btn" id="setGamesBtn">
         <span>К выбору игры</span>
+      </button>
+      <button class="set-row set-btn" id="setMainMenuBtn">
+        <span>Главное меню</span>
       </button>
       <p class="set-foot">Настройки конкретной игры — на её первом экране</p>
       <button class="modal-close" id="settingsCloseBtn">Закрыть</button>

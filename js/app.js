@@ -1994,11 +1994,33 @@
     if (modalOpener && modalOpener.focus) modalOpener.focus();
     modalOpener = null;
   }
+  /* ── MENU-CTX: контекстные пункты меню ──
+     Явное сопоставление screen id → режим (никакой эвристики по тексту экрана).
+     Пункты с data-settings-scope в index.html показываются, только если их скоуп
+     содержит режим активного экрана; глобальные пункты скоупа не имеют. */
+  const SCREEN_SETTINGS_MODE = {
+    'screen-levels': 'fants', 'screen-wheel': 'fants', 'screen-choice': 'fants', 'screen-reveal': 'fants',
+    'screen-phrase-setup': 'phrase', 'screen-phrase-round': 'phrase', 'screen-phrase-task': 'phrase', 'screen-phrase-results': 'phrase',
+    'screen-dm-setup': 'dm', 'screen-dm-listen': 'dm', 'screen-dm-draw': 'dm', 'screen-dm-checks': 'dm', 'screen-dm-check': 'dm', 'screen-dm-results': 'dm',
+    'screen-spy-setup': 'spy', 'screen-spy-reveal': 'spy', 'screen-spy-draw': 'spy', 'screen-spy-discussion': 'spy',
+    'screen-spy-vote': 'spy', 'screen-spy-vote-result': 'spy', 'screen-spy-guess': 'spy', 'screen-spy-final': 'spy'
+  };
+  function applySettingsContext() {
+    const act = activeScreenId();
+    const mode = SCREEN_SETTINGS_MODE[act] || '';   // главный/игроки/выбор игры — без режимных пунктов
+    document.querySelectorAll('#settingsModal [data-settings-scope]').forEach(el => {
+      el.classList.toggle('hidden', !el.dataset.settingsScope.split(/\s+/).includes(mode));
+    });
+    // на главном экране «Главное меню» ничего не меняет — пункт скрывается
+    $('#setMainMenuBtn').classList.toggle('hidden', act === 'screen-main');
+  }
+
   function openSettings() {
     $('#setPlayersCount').textContent = state.players.filter(Boolean).length || '—';   // SET-1: без пустых полей
     $('#setSoundState').textContent = state.sound ? 'Вкл' : 'Выкл';
     $('#setTtsState').textContent = state.tts ? 'Вкл' : 'Выкл';
     $('#punishInput').value = state.punish;
+    applySettingsContext();
     openModal('#settingsModal');
   }
   $('#menuBtn').addEventListener('click', openSettings);
@@ -2582,6 +2604,51 @@
     navFromPop = false;
   }
   $('#setGamesBtn').addEventListener('click', spyAbandonIfUnfinished);
+
+  /* ── MENU-HOME: «Главное меню» — на #screen-main без потери данных ──
+     Игроки/настройки/статистика — в хранилище, их переход не трогает.
+     Незавершённый прогресс не теряется молча: у шпиона партия живёт только в
+     памяти — confirm; у фразы незавершённый круг — то же подтверждение, что у
+     кнопки «Назад» с экрана пары. У Draw Memory прогресс сохраняется сам. */
+  function confirmMainMenuExit() {
+    const act = activeScreenId();
+    if (String(act).startsWith('screen-spy-') && spy.game && spy.game.phase !== 'finished') {
+      if (!confirm('Выйти в главное меню? Незавершённая партия «Шпиона» будет потеряна.')) return false;
+      spy.game = null;
+      return true;
+    }
+    if ((act === 'screen-phrase-round' || act === 'screen-phrase-task') && (phrase.current || phrase.queue.length)) {
+      if (!confirm('Выйти в главное меню? Прогресс круга пропадёт.')) return false;
+      phrase.current = null;
+    }
+    return true;
+  }
+  // остановка движков активного режима: колесо, таймеры и озвучка не играют в фоне
+  function stopActiveEngines() {
+    state.spinToken = (state.spinToken || 0) + 1;   // гасит отложенные переходы колеса
+    cancelSpin();
+    const ov = $('#spinOverlay');
+    ov.classList.add('hidden');
+    ov.classList.remove('show');
+    $('#screen-wheel').classList.remove('leaving');
+    state.spinning = false;
+    stopTaskTimer();
+    stopSpeak();
+    clearTimeout(phrase.pairTimer);
+    // DM: дедлайн дорисовки сохраняем (как dmSuspend), сам раунд не уничтожаем
+    if (dm.round && dm.round.phase === 'draw' && dm.round.drawEndsAt) {
+      dm.round.drawLeft = Math.max(0, Math.ceil((dm.round.drawEndsAt - Date.now()) / 1000));
+      dm.round.drawEndsAt = 0;
+    }
+    dmStopEngine();
+    if (dm.round) dmSave();
+  }
+  $('#setMainMenuBtn').addEventListener('click', () => {
+    if (!confirmMainMenuExit()) return;   // отказ — остаёмся в режиме, партия цела
+    closeModal('#settingsModal');
+    stopActiveEngines();
+    showScreen('screen-main');
+  });
 
   /* ── FEAT-1: экран не засыпает во время партии (Screen Wake Lock) ── */
   let wakeLock = null;
