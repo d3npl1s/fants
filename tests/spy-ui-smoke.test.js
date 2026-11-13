@@ -22,6 +22,7 @@ const html = read('index.html');
 const app = read('js/app.js');
 const sw = read('sw.js');
 const css = read('css/spy.css');
+const core = read('js/spy-core.js');
 
 /* 1. Подключение стилей: spy.css последним из стилей */
 const styleIdx = html.indexOf('css/style.css?v=');
@@ -63,10 +64,60 @@ ok(app.includes('function spyClearCard') && app.includes("'#spyCardWord', '#spyC
    'секретная карточка очищается из DOM при скрытии');
 ok(app.includes("'#spyCardRole', "), 'роль тоже входит в очистку карточки');
 
-/* 7. Попытка шпиона доступна на всех активных фазах */
-['screen-spy-draw', 'screen-spy-discussion', 'screen-spy-vote', 'screen-spy-vote-result']
-  .forEach(s => ok(new RegExp(`spyOpenGuess\\('${s}'\\)`).test(app),
-     `кнопка «Шпион назвал слово» открывает попытку с ${s}`));
+/* 7. Попытка шпиона: коллективный вердикт (SPYGUESS, решение владельца).
+   Старая форма (выбор имени + ручной ввод слова) удалена; UI только вызывает
+   SPYC.resolveSpyGuess(g, true/false) и показывает финал по result из ядра. */
+ok(/function spyOpenGuess\(\)/.test(app),
+   'spyOpenGuess без аргументов — открывает экран вердикта, а не форму ввода');
+ok(/spyOpenGuess\(\)\s*\{[^}]*g\.phase === 'finished' \|\| g\.phase === 'reveal'\) return;/.test(app),
+   'попытка недоступна в reveal и после завершения партии');
+['spyGuessBtn1', 'spyGuessBtn2', 'spyGuessBtn3', 'spyGuessBtn4'].forEach(btn =>
+  ok(app.includes(`$('#${btn}').addEventListener('click', spyOpenGuess)`),
+     `${btn} (активная фаза) ведёт на экран вердикта`));
+
+/* 7a. Экран вердикта: заголовок, пояснение, две кнопки, вызовы ядра */
+const verdictTitle = (html.match(/<h2[^>]*id="spyGuessTitle"[^>]*>([^<]*)<\/h2>/) || [])[1];
+ok(verdictTitle === 'Шпион назвал слово!', 'заголовок экрана попытки — «Шпион назвал слово!»');
+const verdictNote = (html.match(/id="spyGuessNote"[^>]*>([^<]*)<\/p>/) || [])[1];
+ok(verdictNote === 'Остальные решают, верно ли он назвал слово.',
+   'пояснение экрана попытки — «Остальные решают, верно ли он назвал слово.»');
+const yesLabel = (html.match(/<button[^>]*id="spyGuessCorrectBtn"[^>]*>([^<]*)<\/button>/) || [])[1];
+const noLabel = (html.match(/<button[^>]*id="spyGuessWrongBtn"[^>]*>([^<]*)<\/button>/) || [])[1];
+ok(yesLabel === 'Да, угадал', 'кнопка верного вердикта — «Да, угадал»');
+ok(noLabel === 'Нет, ошибся', 'кнопка неверного вердикта — «Нет, ошибся»');
+const verdictFn = (app.match(/const spyVerdict = isCorrect => \{[\s\S]*?\n  \};/) || [])[0] || '';
+ok(verdictFn.includes('SPYC.resolveSpyGuess(g, isCorrect)') &&
+   verdictFn.includes('spyRenderPhase()'),
+   'вердикт обрабатывает только ядро (resolveSpyGuess), после успеха — рендер фазы из ядра');
+ok(app.includes("$('#spyGuessCorrectBtn').addEventListener('click', () => spyVerdict(true))") &&
+   app.includes("$('#spyGuessWrongBtn').addEventListener('click', () => spyVerdict(false))"),
+   '«Да, угадал» → resolveSpyGuess(g, true), «Нет, ошибся» → resolveSpyGuess(g, false)');
+
+/* 7б. Старые элементы ручной попытки полностью удалены */
+['spyGuessInput', 'spyGuessChips', 'spyGuessReject'].forEach(id =>
+  ok(!html.includes(id), `${id} удалён из index.html`));
+ok(!app.includes('guessWho'), 'spy.guessWho и обработчики выбора имени удалены из UI');
+ok(!app.includes('SPYC.makeGuess') && !core.includes('makeGuess'),
+   'makeGuess удалён и из UI, и из ядра (resolveSpyGuess — единственный механизм попытки)');
+ok(!html.includes('Попытку нельзя принять') && !app.includes('Попытку нельзя принять'),
+   'старый экран отказа по введённому слову убран');
+
+/* 7в. Склонения: передача телефона через decline(gen) с fallback на guessGender,
+   «Голосует:»/«Рисует:» — именительный, старые формулировки удалены */
+ok(app.includes("decline(name, 'gen', state.genders[name] || guessGender(name))") &&
+   app.includes("decline(voter, 'gen', state.genders[voter] || guessGender(voter))"),
+   "передача телефона: decline(name/voter, 'gen', state.genders[...] || guessGender(...))");
+ok(app.includes("'Голосует: ' + voter") && app.includes("'Рисует: ' + (SPYC.getCurrentDrawer(g)"),
+   '«Голосует:»/«Рисует:» — имя в именительном падеже (без склонения)');
+ok(!app.includes('Передайте телефон') && !app.includes('Роли розданы'),
+   'старые формулировки «Передайте телефон …»/«Роли розданы» удалены из шаблонов');
+// живая санити-проверка общего модуля склонений на gen-примерах из брифа
+require('../js/lang.js');
+const LANG = globalThis.FANT_LANG;
+const GEN_CASES = [['Денис', 'Дениса'], ['Анна', 'Анны'], ['Илья', 'Ильи'], ['Маша', 'Маши']];
+GEN_CASES.forEach(([nm, gen]) =>
+  ok(LANG.decline(nm, 'gen', LANG.guessGender(nm)) === gen,
+     `decline('${nm}', 'gen') → '${gen}' (общий модуль склонений)`));
 
 /* 8. sw.js: новые файлы в CORE */
 ['./css/spy.css', './js/spy-data.js', './js/spy-core.js'].forEach(f => {
@@ -90,7 +141,6 @@ for (const m of selectorMatches) {
 ok(bad.length === 0, 'все селекторы spy.css с префиксом .spy-/.screen-spy-; нарушители: ' + bad.join(' | '));
 
 /* 10. SPY-INT (05): каждый метод SPYC.*, вызываемый UI, экспортирован ядром */
-const core = read('js/spy-core.js');
 const used = new Set([...app.matchAll(/SPYC\.(\w+)/g)].map(m => m[1]));
 const exportBlock = core.slice(core.indexOf('const SPY_CORE = {'));
 const exported = new Set([...exportBlock.matchAll(/(?:^|[,{\s])([A-Za-z_]\w*)(?=[,}])/g)].map(m => m[1]));
