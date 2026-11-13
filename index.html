@@ -359,7 +359,7 @@
 
       <div class="spy-pass-box" id="spyPassBox">
         <p class="spy-pass-title" id="spyPassTitle"></p>
-        <p class="spy-pass-note">Нажми, когда телефон будет у тебя в руках</p>
+        <p class="spy-pass-note">Готов? Открой карточку.</p>
         <button class="play-btn big" id="spyShowCardBtn"><span>Показать карточку</span><i class="chev">›</i></button>
       </div>
 
@@ -369,11 +369,11 @@
         <p class="spy-card-word" id="spyCardWord"></p>
         <p class="spy-card-cat" id="spyCardCat"></p>
         <p class="spy-card-note" id="spyCardNote"></p>
-        <button class="done-btn wide" id="spyHideCardBtn">Скрыть и передать дальше</button>
+        <button class="done-btn wide" id="spyHideCardBtn">Скрыть карточку</button>
       </div>
 
       <div class="spy-pass-box hidden" id="spyDoneBox">
-        <p class="spy-pass-title">Роли розданы</p>
+        <p class="spy-pass-title">Все получили роли</p>
         <p class="spy-pass-note">Приготовьте общий лист бумаги и одну ручку на всех</p>
         <button class="play-btn big" id="spyBeginDrawBtn"><span>Начать рисование</span><i class="chev">›</i></button>
       </div>
@@ -424,7 +424,7 @@
 
       <div class="spy-pass-box" id="spyVotePass">
         <p class="spy-pass-title" id="spyVotePassTitle"></p>
-        <p class="spy-pass-note">Голос тайный — чужие выборы не показываются</p>
+        <p class="spy-pass-note">Голосование тайное</p>
         <button class="play-btn big" id="spyVoteShowBtn"><span>Голосовать</span><i class="chev">›</i></button>
       </div>
 
@@ -456,27 +456,21 @@
     </div>
   </section>
 
-  <!-- ══════════ Режим «Шпион»: попытка шпиона назвать слово ══════════ -->
+  <!-- ══════════ Режим «Шпион»: коллективный вердикт о попытке ══════════ -->
   <section class="screen screen-spy-guess" id="screen-spy-guess">
     <button class="corner-back" id="spyGuessBack" aria-label="Вернуться в партию">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
     </button>
     <div class="spy-center">
       <p class="ph-progress">Попытка шпиона</p>
-
-      <div class="spy-ballot" id="spyGuessForm">
-        <p class="spy-ballot-for">Кто назвал слово?</p>
-        <div class="spy-chips" id="spyGuessChips"></div>
-        <p class="spy-ballot-for">Какое слово было загадано?</p>
-        <input id="spyGuessInput" class="spy-guess-input" maxlength="40" placeholder="слово" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
-        <button class="done-btn wide" id="spyGuessCheckBtn">Проверить попытку</button>
-        <p class="spy-pass-note">Одна попытка на партию: верный или неверный ответ завершает партию.</p>
-      </div>
-
-      <div class="spy-pass-box hidden" id="spyGuessReject">
-        <p class="spy-pass-title">Попытку нельзя принять</p>
-        <p class="spy-pass-note">Проверьте, кто назвал, и само слово — потом попробуйте ещё раз.</p>
-        <button class="done-btn wide" id="spyGuessReturnBtn">Вернуться в партию</button>
+      <div class="spy-verdict">
+        <h2 class="spy-verdict-title" id="spyGuessTitle">Шпион назвал слово!</h2>
+        <p class="spy-verdict-note" id="spyGuessNote">Остальные решают, верно ли он назвал слово.</p>
+        <div class="spy-verdict-btns">
+          <button class="done-btn wide spy-verdict-yes" id="spyGuessCorrectBtn">Да, угадал</button>
+          <button class="done-btn wide spy-verdict-no" id="spyGuessWrongBtn">Нет, ошибся</button>
+        </div>
+        <p class="spy-verdict-hint">Попытка одна на партию — после вердикта она завершится.</p>
       </div>
     </div>
   </section>
