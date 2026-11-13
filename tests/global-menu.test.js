@@ -169,10 +169,10 @@ ok(/\.dots-btn span\s*\{[^}]*margin:\s*2px 0/.test(style),
 ok(/\.topbar\s*\{[^}]*safe-area-inset-top/.test(style),
    'верхний бар не сдвинут относительно safe-area');
 
-/* ── 10. Версия не поднималась, SW не менялся ── */
+/* ── 10. Версия согласована (интегратор бампает одним релизным коммитом) ── */
 const ver = (sw.match(/const VERSION = '([\d.]+)';/) || [])[1];
-ok(ver === '1.8.0', 'sw.js: VERSION осталась 1.8.0');
-ok(html.includes('?v=' + ver) && html.includes('версия 1.8.0'),
+ok(ver === '1.8.1', 'sw.js: VERSION 1.8.1');
+ok(html.includes('?v=' + ver) && html.includes('версия 1.8.1'),
    'index.html: ?v= и main-ver совпадают с VERSION');
 
 console.log('Global menu: ' + n + ' проверок пройдено');
