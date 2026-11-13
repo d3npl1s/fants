@@ -541,6 +541,38 @@ for (const guess of ['correct', 'wrong']) {
   }
 }
 
+/* ═══ SPY-INT (интеграция 05): votesCast — счётчик принятых голосов ═══ */
+{
+  const g = SC.createGame(R4, 'normal', DATA, rng(7));
+  SC.startGame(g);
+  eq(SC.votesCast(g), 0, 'votesCast: до голосования — 0');
+  finishDrawing(g);                                 // круг рисования → discussion
+  SC.openVote(g);
+  eq(SC.votesCast(g), 0, 'votesCast: открыто голосование, голосов нет — 0');
+  ok(SC.castVote(g, 'Аня', null), 'votesCast: «Пропустить» — тоже голос');
+  eq(SC.votesCast(g), 1, 'votesCast: один голос (пропуск) учтён');
+  ok(SC.castVote(g, 'Борис', 'Вика'), 'votesCast: голос за игрока принимается');
+  eq(SC.votesCast(g), 2, 'votesCast: два голоса');
+  ok(SC.castVote(g, 'Глеб', 'Аня') && SC.castVote(g, 'Вика', null), 'votesCast: остальные голоса принимаются');
+  eq(SC.votesCast(g), 4, 'votesCast: все живые проголосовали — 4');
+  // votes как Object.create(null): чужие/несобственные ключи не считаются
+  const g2 = SC.createGame(R4, 'normal', DATA, rng(8));
+  SC.startGame(g2); finishDrawing(g2); SC.openVote(g2);
+  Object.defineProperty(g2.votes, 'protoTrap', { value: 1, enumerable: false });   // несобственное
+  eq(SC.votesCast(g2), 0, 'votesCast: несобственное свойство не считается');
+  g2.votes.Гость = 1;                              // собственный ключ вне alive
+  eq(SC.votesCast(g2), 1, 'votesCast: собственные ключи считаются');
+}
+
+/* ═══ SPY-INT (интеграция 05): каждый метод SPYC, используемый UI, экспортирован ═══ */
+{
+  const usedByUI = ['createGame', 'startGame', 'getCurrentDrawer', 'completeDrawTurn',
+    'openVote', 'castVote', 'votesCast', 'resolveVote', 'continueAfterVote', 'makeGuess', 'normalizeWord'];
+  for (const m of usedByUI) {
+    ok(typeof SC[m] === 'function', `экспорт: SPY_CORE.${m} — функция`);
+  }
+}
+
 /* ═══ итог ═══ */
 console.log(`Проверок: ${n}, провалов: ${fails}`);
 if (fails) { console.error(`ТЕСТЫ ПРОВАЛЕНЫ`); process.exit(1); }

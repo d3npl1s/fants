@@ -225,6 +225,15 @@
     return true;
   }
 
+  /* ── SPY-INT (интеграция 05): сколько голосов уже принято.
+     UI использует для индекса текущего голосующего и авто-resolve.
+     Object.keys считает только собственные ключи — blankMap это
+     Object.create(null), унаследованные свойства не мешают ── */
+  function votesCast(game) {
+    if (!game || !game.votes) return 0;
+    return Object.keys(game.votes).length;
+  }
+
   /* ── разрешение голосования: plurality с единоличным лидером,
      «Пропустить» наравне с игроками, ничья — никто не выбывает (04 §5).
      Возвращает запись истории или null (рано/некорректно). Очков в записи нет —
@@ -315,7 +324,7 @@
 
   const SPY_CORE = {
     createGame, startGame, getCurrentDrawer, completeDrawTurn,
-    openVote, castVote, resolveVote, continueAfterVote, makeGuess, normalizeWord,
+    openVote, castVote, votesCast, resolveVote, continueAfterVote, makeGuess, normalizeWord,
   };
   root.SPY_CORE = SPY_CORE;
   if (typeof module !== 'undefined' && module.exports) module.exports = SPY_CORE;
