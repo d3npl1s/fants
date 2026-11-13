@@ -419,10 +419,8 @@ for (let seed = 1; seed <= 40; seed++) {
   eq(g.scores['Аня'], 1, 'очки после всех отказов — от единственного вердикта');
   eq(g.scores['Борис'], 0, 'шпион не начислил очки на отказах');
 }
-{
-  // deprecated makeGuess ещё экспортирован (app.js ветки 1.8.2 его вызывает) — снимут на интеграции
-  ok(typeof SC.makeGuess === 'function', 'makeGuess ещё экспортирован (deprecated, удаление на интеграции)');
-}
+// SPY-VERDICT: makeGuess удалён на интеграции — ручная попытка больше не существует
+ok(SC.makeGuess === undefined, 'makeGuess удалён из ядра (интеграция SpyGuess)');
 
 /* ═══ §13: вращение очереди; выбывшие не рисуют (drawOrder зафиксирован скриптом) ═══ */
 {
@@ -608,11 +606,10 @@ for (const verdict of ['correct', 'wrong']) {
 
 /* ═══ SPY-INT (интеграция 05) + SPY-VERDICT (1.8.3): каждый метод SPYC, используемый UI, экспортирован ═══ */
 {
-  // makeGuess — deprecated: ещё вызывается app.js ветки 1.8.2, снимается
-  // на интеграции вместе с переходом UI на resolveSpyGuess
+  // SPY-VERDICT: makeGuess снят на интеграции — UI перешёл на resolveSpyGuess
   const usedByUI = ['createGame', 'startGame', 'getCurrentDrawer', 'completeDrawTurn',
     'openVote', 'castVote', 'votesCast', 'resolveVote', 'continueAfterVote',
-    'resolveSpyGuess', 'makeGuess', 'normalizeWord'];
+    'resolveSpyGuess', 'normalizeWord'];
   for (const m of usedByUI) {
     ok(typeof SC[m] === 'function', `экспорт: SPY_CORE.${m} — функция`);
   }

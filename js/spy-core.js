@@ -62,8 +62,8 @@
   }
 
   /* ── нормализация слова: регистр, ё/е, края, повторные пробелы.
-     В активном механизме попытки (resolveSpyGuess) сравнения текста больше нет;
-     остаётся для deprecated makeGuess и утилитарных нужд ── */
+     В активном механизме попытки (resolveSpyGuess) сравнения текста нет;
+     остаётся экспортом для совместимости и утилитарных нужд ── */
   function normalizeWord(text) {
     return String(text == null ? '' : text)
       .toLowerCase()
@@ -337,33 +337,10 @@
     return true;
   }
 
-  /* deprecated: заменяется resolveSpyGuess, удаление на интеграции.
-     Старый ручной механизм (имя выкрикнувшего + ввод слова) — ещё вызывается
-     app.js ветки 1.8.2; на интеграции UI переходит на resolveSpyGuess,
-     и эта функция снимается вместе со сравнением введённого текста. */
-  function makeGuess(game, playerName, guessText) {
-    if (!inPhase(game, 'draw', 'discussion', 'vote', 'vote-result')) return false;
-    if (game.result) return false;
-    if (typeof playerName !== 'string' || !game.alive.includes(playerName)) return false;
-    if (playerName !== game.spy) return false;
-    const guess = normalizeWord(guessText);
-    if (!guess) return false;
-    if (guess === normalizeWord(game.word)) {
-      game.scores[game.spy] += 2;         // верно: шпиону +2 (04 §7)
-      game.result = { v: 1, outcome: 'spy-guessed', spy: game.spy, word: game.word, category: game.category };
-    } else {
-      /* неверная попытка (временная трактовка MVP, 04 §6): всем остальным +1 */
-      game.players.forEach(p => { if (p !== game.spy) game.scores[p]++; });
-      game.result = { v: 1, outcome: 'spy-wrong-guess', spy: game.spy, word: game.word, category: game.category };
-    }
-    game.phase = 'finished';
-    return true;
-  }
-
   const SPY_CORE = {
     createGame, startGame, getCurrentDrawer, completeDrawTurn,
     openVote, castVote, votesCast, resolveVote, continueAfterVote,
-    resolveSpyGuess, makeGuess, normalizeWord,
+    resolveSpyGuess, normalizeWord,
   };
   root.SPY_CORE = SPY_CORE;
   if (typeof module !== 'undefined' && module.exports) module.exports = SPY_CORE;
