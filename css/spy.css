@@ -11,6 +11,12 @@
   background: linear-gradient(178deg, #5e35b1, #263238);
 }
 .screen-spy-final.active { display: flex; flex-direction: column; }
+/* настройки: тот же flex-контекст, что у фразовых настроек (style.css задаёт его
+   только #screen-phrase-setup/#screen-phrase-results). Без него section — block,
+   flex:1 и overflow-y у .phrase-setup-inner не работают: контент не прокручивается
+   и «Раздать роли» уходит за экран на низких viewport. Кнопка остаётся в потоке. */
+.screen-spy-setup.active { display: flex; flex-direction: column; }
+.screen-spy-setup .phrase-setup-inner { min-height: 0; }   /* flex-child с overflow-y: auto */
 
 /* ── центрированная рабочая область публичных экранов ── */
 .spy-center {
@@ -99,6 +105,13 @@
 }
 .spy-chips button.sel { background: #fff; color: var(--navy); border-color: #fff; }
 .spy-chips button.spy-skip.sel { background: #ffd166; border-color: #ffd166; }
+/* «Пропустить» — отдельная строка на всю ширину сетки: не конкурирует за половину
+   ряда с длинным именем игрока и всегда одной строкой (без переноса «ь») */
+.spy-chips button.spy-skip {
+  grid-column: 1 / -1;
+  white-space: nowrap;
+  word-break: normal;
+}
 .spy-guess-input {
   width: 100%; height: 56px; border: none; border-radius: 14px; padding: 0 16px;
   font-family: inherit; font-size: 19px; font-weight: 800; color: var(--navy);
