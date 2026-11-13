@@ -2,6 +2,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -9,12 +11,37 @@ permissions:
   pages: write
   id-token: write
 
+# по ref: PR-ветка не отменяет идущий деплой main
 concurrency:
-  group: pages
+  group: pages-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # обязательные проверки: Node-тесты + синтаксис; vanilla JS, без package manager
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Node-тесты
+        run: |
+          node tests/counts.js
+          node tests/content-check.js
+          node tests/core.test.js
+          node tests/draw-memory.test.js
+          node tests/spin-cancel.test.js
+          node tests/spy-data.test.js
+          node tests/spy-core.test.js
+          node tests/spy-ui-smoke.test.js
+      - name: Синтаксис JS
+        run: for f in js/*.js tests/*.js; do node --check "$f"; done
+
+  # публикация — только после зелёного test и не на PR
   deploy:
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
