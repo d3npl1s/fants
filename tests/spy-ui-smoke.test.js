@@ -110,8 +110,10 @@ ok(app.includes("$('#spyGuessBtn4').classList.toggle('hidden', caught)"),
 ok(app.includes("'Показать итоги'"),
    'кнопка после поимки шпиона ведёт в итоги, а не «следующий круг»');
 
-/* 12. Версия не тронута (бамп делает менеджер единым коммитом) */
-ok(/const VERSION = '1\.\d+(\.\d+)?';/.test(sw), 'sw.js: VERSION имеет ожидаемый формат');
-ok(!html.includes('?v=1.8'), 'index.html: ?v=1.8 ещё не поднимался');
+/* 12. Версия согласована (бамп делает менеджер одним релизным коммитом) */
+const ver = (sw.match(/const VERSION = '([\d.]+)';/) || [])[1];
+ok(ver === '1.8.0', 'sw.js: VERSION 1.8.0 (релиз шпиона)');
+ok(html.includes(`?v=${ver}`) && html.includes('версия 1.8.0'),
+   'index.html: ?v= и main-ver совпадают с VERSION');
 
 console.log('SPY-UI smoke: ' + n + ' проверок пройдено');
