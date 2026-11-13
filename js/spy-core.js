@@ -322,9 +322,31 @@
     return true;
   }
 
+  /* ── SPY-SCORE (04): накопительный счёт между партиями ──
+     Чистая функция без состояния: складывает очки завершённой партии
+     в накопительный счёт прошлых партий. total — карта «имя → очки»
+     (может быть null/пустой), party — очки завершённой партии.
+     Возвращает НОВУЮ карту, аргументы не мутирует. Хранение и сброс —
+     ответственность UI, ядро про localStorage ничего не знает. */
+  function mergeScores(total, party) {
+    const out = blankMap();
+    const add = map => {
+      if (!map) return;
+      Object.keys(map).forEach(k => {
+        const v = Number(map[k]);
+        if (!isFinite(v)) return;           // битые значения не тянут счёт вниз
+        out[k] = (out[k] || 0) + v;
+      });
+    };
+    add(total);
+    add(party);
+    return out;
+  }
+
   const SPY_CORE = {
     createGame, startGame, getCurrentDrawer, completeDrawTurn,
     openVote, castVote, votesCast, resolveVote, continueAfterVote, makeGuess, normalizeWord,
+    mergeScores,
   };
   root.SPY_CORE = SPY_CORE;
   if (typeof module !== 'undefined' && module.exports) module.exports = SPY_CORE;

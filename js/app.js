@@ -2206,7 +2206,9 @@
     chipList: [],           // имена текущих чипов — клики идут по индексам, не по именам
     returnScreen: '',       // экран, из которого открыли попытку шпиона
     endHint: '',            // кто завершил партию (выводится из порядка вызовов core)
-    lastEliminated: null    // кого исключило последнее голосование (мирный)
+    lastEliminated: null,   // кого исключило последнее голосование (мирный)
+    totalScores: store.get('spyScores', {}),  // SPY-SCORE: накопительный счёт между партиями
+    scoreApplied: null      // партия, уже учтённая в totalScores (защита от двойного начисления)
   };
   const SPY_PHASE_SCREENS = {
     reveal: 'screen-spy-reveal', draw: 'screen-spy-draw', discussion: 'screen-spy-discussion',
@@ -2538,6 +2540,13 @@
   function spyRenderFinal() {
     const g = spy.game;
     if (!g) return;
+    // SPY-SCORE (04): очки партии попадают в накопительный счёт ровно один раз —
+    // при первом рендере финала; повторные рендеры (история/возврат) не удваивают
+    if (spy.scoreApplied !== g) {
+      spy.scoreApplied = g;
+      spy.totalScores = SPYC.mergeScores(spy.totalScores, g.scores);
+      store.set('spyScores', spy.totalScores);
+    }
     const r = g.result || {};
     // SPY-INT (05): единственный источник истины — result.outcome из ядра;
     // endHint остаётся только последнимfallback'ом на случай битого result
@@ -2549,9 +2558,21 @@
     const showCat = g.mode === 'normal' && !!g.category;
     $('#spyFinalCatLine').classList.toggle('hidden', !showCat);
     if (showCat) $('#spyFinalCat').textContent = g.category.name;
+    // SPY-SCORE: таблица показывает накопительный счёт (партии прошлые + эта),
+    // игроки вне текущей партии в таблице не теряются — остаются в хранилище
     $('#spyFinalScores').innerHTML = g.players.map(p =>
-      `<div class="ph-result-row"><b>${esc(p)}</b><span class="ph-score">${g.scores[p] || 0}</span></div>`).join('');
+      `<div class="ph-result-row"><b>${esc(p)}</b><span class="ph-score">${spy.totalScores[p] || 0}</span></div>`).join('');
   }
+  // SPY-SCORE: сброс накопительного счёта — только по явному подтверждению.
+  // scoreApplied НЕ трогаем: перерисовки финала этой же партии не должны
+  // заново влить её очки в только что очищенный счёт
+  $('#spyFinalResetBtn').addEventListener('click', () => {
+    if (!confirm('Сбросить накопительный счёт «Шпиона»?')) return;
+    spy.totalScores = {};
+    store.set('spyScores', spy.totalScores);
+    toast('Накопительный счёт сброшен');
+    if (spy.game) spyRenderFinal();   // перерисовать таблицу нулями
+  });
   $('#spyAgainBtn').addEventListener('click', () => {
     const g = spy.game;
     const players = g ? g.players.slice() : state.players.filter(Boolean);

@@ -150,3 +150,6 @@
   .spy-card-word { font-size: 26px; }
   .spy-card { padding: 14px 16px; gap: 8px; }
 }
+
+/* ── SPY-SCORE: кнопка сброса накопительного счёта — тише основных действий ── */
+.spy-reset-btn { font-size: 13px; opacity: .72; padding: 10px 16px; }
