@@ -18,6 +18,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="css/style.css?v=1.7.1">
 <link rel="stylesheet" href="css/desktop.css?v=1.7.1">
+<link rel="stylesheet" href="css/spy.css?v=1.7.1">
 </head>
 <body>
 <div id="app" data-level="fun">
@@ -322,6 +323,182 @@
     </div>
   </section>
 
+  <!-- ══════════ Режим «Шпион»: настройки ══════════ -->
+  <section class="screen screen-spy-setup" id="screen-spy-setup">
+    <button class="corner-back" id="spySetupBack" aria-label="К выбору игры">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="phrase-setup-inner">
+      <h2 class="setup-title">Шпион</h2>
+      <p class="setup-sub">Все рисуют одно секретное слово на общем листе — каждый одним непрерывным штрихом. Один игрок слова не знает: вычислите его голосованием. Понадобятся бумага, ручка и минимум 4 игрока.</p>
+
+      <div class="ph-field important">
+        <label>Сложность</label>
+        <div class="spy-mode-cards" id="spyModeCards"></div>
+      </div>
+
+      <div class="ph-field">
+        <label>Игроки — минимум 4, максимум 12</label>
+        <p class="spy-players-line" id="spyPlayersLine"></p>
+        <button class="ghost-btn" id="spyPlayersBtn">Изменить список игроков</button>
+      </div>
+
+      <div class="setup-actions">
+        <button class="play-btn big" id="spyStartBtn"><span>Раздать роли</span><i class="chev">›</i></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Режим «Шпион»: раздача ролей ══════════ -->
+  <section class="screen screen-spy-reveal" id="screen-spy-reveal">
+    <button class="corner-back" id="spyRevealBack" aria-label="Выйти из партии">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="spy-center">
+      <p class="ph-progress" id="spyRevealProgress">Карточка 1 из 4</p>
+
+      <div class="spy-pass-box" id="spyPassBox">
+        <p class="spy-pass-title" id="spyPassTitle"></p>
+        <p class="spy-pass-note">Нажми, когда телефон будет у тебя в руках</p>
+        <button class="play-btn big" id="spyShowCardBtn"><span>Показать карточку</span><i class="chev">›</i></button>
+      </div>
+
+      <div class="spy-card hidden" id="spyCard">
+        <p class="spy-card-name" id="spyCardName"></p>
+        <p class="spy-card-role" id="spyCardRole"></p>
+        <p class="spy-card-word" id="spyCardWord"></p>
+        <p class="spy-card-cat" id="spyCardCat"></p>
+        <p class="spy-card-note" id="spyCardNote"></p>
+        <button class="done-btn wide" id="spyHideCardBtn">Скрыть и передать дальше</button>
+      </div>
+
+      <div class="spy-pass-box hidden" id="spyDoneBox">
+        <p class="spy-pass-title">Роли розданы</p>
+        <p class="spy-pass-note">Приготовьте общий лист бумаги и одну ручку на всех</p>
+        <button class="play-btn big" id="spyBeginDrawBtn"><span>Начать рисование</span><i class="chev">›</i></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Режим «Шпион»: круг рисования ══════════ -->
+  <section class="screen screen-spy-draw" id="screen-spy-draw">
+    <button class="corner-back" id="spyDrawBack" aria-label="Выйти из партии">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="spy-center">
+      <p class="ph-progress" id="spyDrawProgress">Круг 1</p>
+      <h2 class="spy-drawer" id="spyDrawerName">Сейчас рисует: —</h2>
+      <p class="spy-note hidden" id="spyCatLine"></p>
+      <p class="spy-pass-note">Один непрерывный штрих — ручку от листа не отрывать.<br>Сколько раскрыть в линии — решаешь сам.</p>
+      <div class="spy-actions">
+        <button class="done-btn wide" id="spyLineDoneBtn">Линия готова — передать дальше</button>
+        <button class="ghost-btn spy-guess-btn" id="spyGuessBtn1">Шпион назвал слово</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Режим «Шпион»: обсуждение ══════════ -->
+  <section class="screen screen-spy-discussion" id="screen-spy-discussion">
+    <button class="corner-back" id="spyDiscussBack" aria-label="Выйти из партии">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="spy-center">
+      <p class="ph-progress" id="spyDiscussProgress">Круг 1 — обсуждение</p>
+      <h2 class="spy-drawer">Обсудите рисунок</h2>
+      <p class="spy-note hidden" id="spyCatLine2"></p>
+      <p class="spy-pass-note">Кто нарисовал подозрительно мало? Подозревайте вслух — и готовьтесь голосовать.</p>
+      <div class="spy-actions">
+        <button class="play-btn big" id="spyToVoteBtn"><span>Перейти к голосованию</span><i class="chev">›</i></button>
+        <button class="ghost-btn spy-guess-btn" id="spyGuessBtn2">Шпион назвал слово</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Режим «Шпион»: тайное голосование ══════════ -->
+  <section class="screen screen-spy-vote" id="screen-spy-vote">
+    <button class="corner-back" id="spyVoteBack" aria-label="Выйти из партии">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="spy-center">
+      <p class="ph-progress" id="spyVoteProgress">Голосование</p>
+
+      <div class="spy-pass-box" id="spyVotePass">
+        <p class="spy-pass-title" id="spyVotePassTitle"></p>
+        <p class="spy-pass-note">Голос тайный — чужие выборы не показываются</p>
+        <button class="play-btn big" id="spyVoteShowBtn"><span>Голосовать</span><i class="chev">›</i></button>
+      </div>
+
+      <div class="spy-ballot hidden" id="spyBallot">
+        <p class="spy-ballot-for" id="spyBallotFor"></p>
+        <div class="spy-chips" id="spyVoteChips"></div>
+        <button class="done-btn wide" id="spyVoteConfirmBtn">Подтвердить голос</button>
+      </div>
+
+      <button class="ghost-btn spy-guess-btn" id="spyGuessBtn3">Шпион назвал слово</button>
+    </div>
+  </section>
+
+  <!-- ══════════ Режим «Шпион»: результат голосования ══════════ -->
+  <section class="screen screen-spy-vote-result" id="screen-spy-vote-result">
+    <button class="corner-back" id="spyVoteResultBack" aria-label="Выйти из партии">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="spy-center">
+      <p class="ph-progress" id="spyVRProgress">Итог голосования</p>
+      <div class="spy-vr-box">
+        <p class="spy-vr-title" id="spyVRTitle"></p>
+        <p class="spy-vr-note" id="spyVRNote"></p>
+      </div>
+      <div class="spy-actions">
+        <button class="play-btn big" id="spyNextRoundBtn"><span>Следующий круг</span><i class="chev">›</i></button>
+        <button class="ghost-btn spy-guess-btn" id="spyGuessBtn4">Шпион назвал слово</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Режим «Шпион»: попытка шпиона назвать слово ══════════ -->
+  <section class="screen screen-spy-guess" id="screen-spy-guess">
+    <button class="corner-back" id="spyGuessBack" aria-label="Вернуться в партию">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="spy-center">
+      <p class="ph-progress">Попытка шпиона</p>
+
+      <div class="spy-ballot" id="spyGuessForm">
+        <p class="spy-ballot-for">Кто назвал слово?</p>
+        <div class="spy-chips" id="spyGuessChips"></div>
+        <p class="spy-ballot-for">Какое слово было загадано?</p>
+        <input id="spyGuessInput" class="spy-guess-input" maxlength="40" placeholder="слово" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+        <button class="done-btn wide" id="spyGuessCheckBtn">Проверить попытку</button>
+        <p class="spy-pass-note">Одна попытка на партию: верный или неверный ответ завершает партию.</p>
+      </div>
+
+      <div class="spy-pass-box hidden" id="spyGuessReject">
+        <p class="spy-pass-title">Попытку нельзя принять</p>
+        <p class="spy-pass-note">Проверьте, кто назвал, и само слово — потом попробуйте ещё раз.</p>
+        <button class="done-btn wide" id="spyGuessReturnBtn">Вернуться в партию</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ Режим «Шпион»: финал ══════════ -->
+  <section class="screen screen-spy-final" id="screen-spy-final">
+    <div class="phrase-setup-inner">
+      <h2 class="setup-title" id="spyFinalTitle">Партия завершена</h2>
+      <p class="spy-vr-note spy-final-why" id="spyFinalWhy"></p>
+      <div class="spy-vr-box">
+        <p class="spy-reveal-line">Шпион: <b id="spyFinalSpy"></b></p>
+        <p class="spy-reveal-line">Слово: <b id="spyFinalWord"></b></p>
+        <p class="spy-reveal-line hidden" id="spyFinalCatLine">Категория: <b id="spyFinalCat"></b></p>
+      </div>
+      <div id="spyFinalScores" class="ph-results"></div>
+      <div class="setup-actions ph-actions-col">
+        <button class="play-btn big" id="spyAgainBtn"><span>Сыграть ещё раз</span><i class="chev">›</i></button>
+        <button class="ghost-btn" id="spyGamesBtn">К выбору игр</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ══════════ Экран 3: колесо ══════════ -->
   <section class="screen screen-wheel" id="screen-wheel">
     <div class="wheel-bg">
@@ -487,6 +664,8 @@
 <script src="js/phrase-data.js?v=1.7.1"></script>
 <script src="js/draw-memory-data.js?v=1.7.1"></script>
 <script src="js/draw-memory-core.js?v=1.7.1"></script>
+<script src="js/spy-data.js?v=1.7.1"></script>
+<script src="js/spy-core.js?v=1.7.1"></script>
 <script src="js/app.js?v=1.7.1"></script>
 </body>
 </html>

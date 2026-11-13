@@ -121,6 +121,11 @@
       navFromPop = true;
       showScreen(st.fant);
       navFromPop = false;
+      // SPY-NAV: «Назад» наружу из режима шпиона выбрасывает незавершённую партию
+      // (без confirm — блокировать системную кнопку нельзя), «Назад» внутрь —
+      // перерисовывает экран по актуальной фазе, старые состояния не показываются
+      if (String(st.fant).startsWith('screen-spy-')) spyOnHistory(st.fant);
+      else spyAbandonIfUnfinished();
     }
   });
 
@@ -402,7 +407,7 @@
     // PLAYERS-2: круг сбрасывается только при изменении состава (добавили/убрали),
     // простое переименование игру не ломает
     if (state.players.join('|') !== rosterAtOpen) resetRounds();
-    if (playersReturn) { const back = playersReturn; playersReturn = null; showScreen(back); }
+    if (playersReturn) { const back = playersReturn; playersReturn = null; if (back === 'screen-spy-setup') spyRenderSetup(); showScreen(back); }
     else showScreen('screen-games');
   });
 
@@ -410,12 +415,14 @@
   const GAME_ICONS = {
     fants: `<svg class="game-icon" viewBox="0 0 120 120"><rect x="30" y="16" width="60" height="60" rx="14" fill="#fff"/><path d="M44 52 40 26l14 10 6-14 6 14 14-10-4 26z" fill="none" stroke="#21265c" stroke-width="4" stroke-linejoin="round"/><path d="M44 52h32v6c0 5-4 9-9 9H53c-5 0-9-4-9-9z" fill="#21265c"/></svg>`,
     phrase: `<svg class="game-icon" viewBox="0 0 120 120"><path fill="#fff" d="M18 24c0-6 5-11 11-11h62c6 0 11 5 11 11v40c0 6-5 11-11 11H56L38 94V75H29c-6 0-11-5-11-11z"/><circle cx="43" cy="44" r="5" fill="#26b5a2"/><circle cx="60" cy="44" r="5" fill="#26b5a2"/><circle cx="77" cy="44" r="5" fill="#26b5a2"/><path fill="#fff" opacity=".85" d="M50 96l14-12 18 8c4 2 6 7 4 11s-7 6-11 4z"/></svg>`,
-    draw: `<svg class="game-icon" viewBox="0 0 120 120"><rect x="20" y="12" width="76" height="96" rx="10" fill="#fff"/><path d="M32 38h52M32 54h52M32 70h34" stroke="#c25a2a" stroke-width="6" stroke-linecap="round" fill="none" opacity=".4"/><path d="M99 28 59 84l-17 9 4-19 40-56z" fill="#ffd166" stroke="#21265c" stroke-width="4" stroke-linejoin="round"/><path d="M91 40 71 68" stroke="#21265c" stroke-width="4" stroke-linecap="round"/></svg>`
+    draw: `<svg class="game-icon" viewBox="0 0 120 120"><rect x="20" y="12" width="76" height="96" rx="10" fill="#fff"/><path d="M32 38h52M32 54h52M32 70h34" stroke="#c25a2a" stroke-width="6" stroke-linecap="round" fill="none" opacity=".4"/><path d="M99 28 59 84l-17 9 4-19 40-56z" fill="#ffd166" stroke="#21265c" stroke-width="4" stroke-linejoin="round"/><path d="M91 40 71 68" stroke="#21265c" stroke-width="4" stroke-linecap="round"/></svg>`,
+    spy: `<svg class="game-icon" viewBox="0 0 120 120"><path fill="#fff" d="M30 48c-2-16 12-30 30-30s32 14 30 30z"/><rect x="22" y="48" width="76" height="12" rx="6" fill="#fff"/><circle cx="44" cy="82" r="13" fill="none" stroke="#fff" stroke-width="6"/><circle cx="76" cy="82" r="13" fill="none" stroke="#fff" stroke-width="6"/><path d="M57 82h6" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>`
   };
   const GAMES = [
     { id: 'fants', name: 'Фанты', tagline: 'Правда или действие: колесо, уровни и задания.' },
     { id: 'phrase', name: 'Продолжи фразу', tagline: 'Отвечай неправильно, но уверенно. Зал ставит оценку.' },
-    { id: 'draw', name: 'Нарисуй по памяти', tagline: 'Услышь слова, зарисуй по памяти и угадай чужие рисунки.' }
+    { id: 'draw', name: 'Нарисуй по памяти', tagline: 'Услышь слова, зарисуй по памяти и угадай чужие рисунки.' },
+    { id: 'spy', name: 'Шпион', tagline: 'Рисуйте одно слово по штриху — и вычислите того, кто его не знает.' }
   ];
   function buildGames() {
     $('#gamesTrack').innerHTML = GAMES.map(g => `
@@ -440,6 +447,7 @@
     // настройки открываются только по кнопке-меню, не поверх каждой игры
     if (b.dataset.play === 'fants') { showScreen('screen-levels'); syncCarousel(); }
     else if (b.dataset.play === 'draw') { dmEnter(); }
+    else if (b.dataset.play === 'spy') { spyEnter(); }
     else { renderModeChips(); showScreen('screen-phrase-setup'); }
   });
   $('#backToGames').addEventListener('click', () => showScreen('screen-games'));
@@ -2158,10 +2166,420 @@
     if (banOpen && !e.target.closest('#banPopup') && !e.target.closest('.choice-card')) hideBanPopup();
   }, true);
 
+  /* ══════════ Режим «Шпион» ══════════
+     Секретные роли на одном телефоне, рисование на бумаге (по одному непрерывному
+     штриху), тайное голосование и попытка шпиона назвать слово.
+     Чистая логика — js/spy-core.js (window.SPY_CORE), база слов — js/spy-data.js.
+     Партия живёт в памяти: системный «Назад»/меню выбрасывает незавершённую партию,
+     восстановление не делаем (согласовано как вариант ТЗ «прогресс будет потерян»). */
+  const SPYC = window.SPY_CORE;
+  const SPYD = window.SPY_DATA;
+  const spy = {
+    game: null,             // объект партии из SPY_CORE.createGame
+    mode: store.get('spyMode', 'normal') === 'hardcore' ? 'hardcore' : 'normal',
+    revealIdx: 0,           // индекс раздачи карточек по game.players
+    ballotOpen: false,      // экран бюллетеня открыт (иначе — заставка передачи)
+    chosenVote: undefined,  // выбор в бюллетене: имя | null («Пропустить») | undefined — не выбран
+    guessWho: undefined,    // выбранный игрок на экране попытки
+    chipList: [],           // имена текущих чипов — клики идут по индексам, не по именам
+    returnScreen: '',       // экран, из которого открыли попытку шпиона
+    endHint: '',            // кто завершил партию (выводится из порядка вызовов core)
+    lastEliminated: null    // кого исключило последнее голосование (мирный)
+  };
+  const SPY_PHASE_SCREENS = {
+    reveal: 'screen-spy-reveal', draw: 'screen-spy-draw', discussion: 'screen-spy-discussion',
+    vote: 'screen-spy-vote', 'vote-result': 'screen-spy-vote-result', finished: 'screen-spy-final'
+  };
+  const SPY_MODES = [
+    { id: 'normal', name: 'Обычный', desc: 'Все знают категорию. Мирные знают слово, шпион — только категорию.' },
+    { id: 'hardcore', name: 'Хардкор', desc: 'Категории нет ни у кого. Мирные знают слово, шпион не знает ни слова, ни категории.' }
+  ];
+
+  function spyAbandonIfUnfinished() {
+    if (spy.game && spy.game.phase !== 'finished') spy.game = null;
+  }
+  function spyShow(id) { if (activeScreenId() !== id) showScreen(id); }
+
+  /* ── вход в режим (кнопка «Играть» на карточке в карусели) ── */
+  function spyEnter() {
+    if (!SPYC || !SPYD || typeof SPYC.createGame !== 'function') {
+      toast('Режим «Шпион» ещё не собран — обновите страницу позже');
+      return;
+    }
+    if (state.players.filter(Boolean).length < 4) {
+      toast('Для «Шпиона» нужно минимум 4 игрока');
+      openPlayers('screen-spy-setup');
+      return;
+    }
+    spyRenderSetup();
+    showScreen('screen-spy-setup');
+  }
+
+  /* ── настройки ── */
+  function spyRenderSetup() {
+    $('#spyModeCards').innerHTML = SPY_MODES.map(m =>
+      `<button type="button" class="spy-mode-card${spy.mode === m.id ? ' on' : ''}" data-mode="${m.id}"><b>${m.name}</b><span>${m.desc}</span></button>`).join('');
+    const n = state.players.filter(Boolean).length;
+    $('#spyPlayersLine').textContent = n < 4
+      ? 'Сейчас игроков: ' + n + ' — для шпиона нужно минимум 4'
+      : 'Игроков в списке: ' + n + ' — состав подходит';
+  }
+  $('#spyModeCards').addEventListener('click', e => {
+    const b = e.target.closest('[data-mode]');
+    if (!b || b.dataset.mode === spy.mode) return;
+    spy.mode = b.dataset.mode;
+    store.set('spyMode', spy.mode);
+    spyRenderSetup();
+  });
+  $('#spyPlayersBtn').addEventListener('click', () => openPlayers('screen-spy-setup'));
+  $('#spyStartBtn').addEventListener('click', () => {
+    const players = state.players.map(s => (s || '').trim()).filter(Boolean);
+    if (players.length < 4) { toast('Нужно минимум 4 игрока'); openPlayers('screen-spy-setup'); return; }
+    if (new Set(players.map(s => s.toLowerCase())).size !== players.length) { toast('Имена не должны повторяться'); return; }
+    try {
+      spy.game = SPYC.createGame(players, spy.mode, SPYD);
+    } catch (e) {
+      toast('Не удалось начать: ' + (e && e.message ? e.message : 'проверьте базу слов'));
+      return;
+    }
+    spy.revealIdx = 0;
+    spy.ballotOpen = false;
+    spy.chosenVote = undefined;
+    spy.endHint = '';
+    spy.lastEliminated = null;
+    spyRenderPhase();
+  });
+  $('#spySetupBack').addEventListener('click', () => showScreen('screen-games'));
+
+  /* ── единый маршрутизатор по фазе партии ── */
+  function spyRenderPhase() {
+    const g = spy.game;
+    if (!g) { spyShow('screen-games'); return; }
+    // все голоса собраны — сначала разрешаем голосование, потом показываем итог
+    if (g.phase === 'vote' && SPYC.votesCast(g) >= g.alive.length) { spyResolveVote(); return; }
+    if (g.phase === 'reveal') spyRenderReveal();
+    else if (g.phase === 'draw') spyRenderDraw();
+    else if (g.phase === 'discussion') spyRenderDiscussion();
+    else if (g.phase === 'vote') spyRenderVote();
+    else if (g.phase === 'vote-result') spyRenderVoteResult();
+    else if (g.phase === 'finished') spyRenderFinal();
+    spyShow(SPY_PHASE_SCREENS[g.phase] || 'screen-games');
+  }
+
+  /* ── раздача ролей ── */
+  function spyRenderReveal() {
+    const g = spy.game;
+    const done = spy.revealIdx >= g.players.length;
+    $('#spyRevealProgress').textContent = done
+      ? 'Все карточки розданы'
+      : 'Карточка ' + (spy.revealIdx + 1) + ' из ' + g.players.length;
+    $('#spyPassBox').classList.toggle('hidden', done);
+    $('#spyDoneBox').classList.toggle('hidden', !done);
+    $('#spyCard').classList.add('hidden');
+    spyClearCard();   // слово/роль предыдущего игрока не остаются в DOM
+    if (!done) $('#spyPassTitle').textContent = 'Передайте телефон ' + g.players[spy.revealIdx];
+  }
+  // секреты карточки стираются явно: ни текста, ни подсветки роли в видимом DOM
+  function spyClearCard() {
+    ['#spyCardName', '#spyCardRole', '#spyCardWord', '#spyCardCat', '#spyCardNote']
+      .forEach(s => { $(s).textContent = ''; });
+    $('#spyCard').classList.remove('is-spy');
+  }
+  $('#spyShowCardBtn').addEventListener('click', () => {
+    const g = spy.game;
+    if (!g || g.phase !== 'reveal' || spy.revealIdx >= g.players.length) return;
+    const name = g.players[spy.revealIdx];
+    const isSpy = name === g.spy;
+    $('#spyPassBox').classList.add('hidden');
+    $('#spyCardName').textContent = name;
+    $('#spyCardRole').textContent = isSpy ? 'Вы шпион' : 'Мирный';
+    $('#spyCard').classList.toggle('is-spy', isSpy);
+    if (!isSpy) {
+      $('#spyCardWord').textContent = g.word;
+      $('#spyCardCat').textContent = g.category ? g.category.name : '';
+      $('#spyCardCat').classList.toggle('hidden', !g.category);   // хардкор: категории нет
+      $('#spyCardNote').textContent = g.mode === 'normal'
+        ? 'Это слово знают все мирные. Шпион видит только категорию.'
+        : 'Категории нет — угадать можно только по рисунку.';
+    } else {
+      $('#spyCardWord').textContent = '';
+      $('#spyCardCat').textContent = g.category ? g.category.name : '';
+      $('#spyCardCat').classList.toggle('hidden', !g.category);
+      $('#spyCardNote').textContent = g.mode === 'normal'
+        ? 'Слово тебе не показывается. Категория — твоя единственная подсказка.'
+        : 'Ни слова, ни категории. Смотри на рисунок и веди себя как мирный.';
+    }
+    $('#spyCard').classList.remove('hidden');
+  });
+  $('#spyHideCardBtn').addEventListener('click', () => {
+    const g = spy.game;
+    if (!g || g.phase !== 'reveal') return;
+    spy.revealIdx++;
+    spyRenderReveal();
+  });
+  $('#spyBeginDrawBtn').addEventListener('click', () => {
+    const g = spy.game;
+    if (!g || g.phase !== 'reveal') return;
+    try { SPYC.startGame(g); } catch { return; }
+    spyRenderPhase();
+  });
+
+  /* ── публичные фазы: рисование и обсуждение ── */
+  function spySyncCatLine(sel) {
+    const g = spy.game, el = $(sel);
+    // хардкор: категории не существует — она не показывается нигде (правило 04)
+    if (g.mode === 'normal' && g.category) {
+      el.textContent = 'Категория: ' + g.category.name;
+      el.classList.remove('hidden');
+    } else {
+      el.textContent = '';
+      el.classList.add('hidden');
+    }
+  }
+  function spyRenderDraw() {
+    const g = spy.game;
+    $('#spyDrawProgress').textContent = 'Круг ' + g.round;
+    $('#spyDrawerName').textContent = 'Сейчас рисует: ' + (SPYC.getCurrentDrawer(g) || '—');
+    spySyncCatLine('#spyCatLine');
+  }
+  function spyRenderDiscussion() {
+    const g = spy.game;
+    $('#spyDiscussProgress').textContent = 'Круг ' + g.round + ' — обсуждение';
+    spySyncCatLine('#spyCatLine2');
+  }
+  $('#spyLineDoneBtn').addEventListener('click', () => {
+    const g = spy.game;
+    if (!g || g.phase !== 'draw') return;
+    const drawer = SPYC.getCurrentDrawer(g);
+    if (!drawer) return;
+    try { SPYC.completeDrawTurn(g, drawer); } catch { return; }   // чужой/повторный ход ядро отклоняет
+    spyRenderPhase();
+  });
+  $('#spyToVoteBtn').addEventListener('click', () => {
+    const g = spy.game;
+    if (!g || g.phase !== 'discussion') return;
+    try { SPYC.openVote(g); } catch { return; }
+    spy.ballotOpen = false;
+    spyRenderPhase();
+  });
+
+  /* ── тайное голосование ── */
+  function spyRenderVote() {
+    const g = spy.game;
+    // все голоса собраны — сразу к разрешению голосования (SPY-UI: без «телефон undefined»)
+    if (SPYC.votesCast(g) >= g.alive.length) { spyResolveVote(); return; }
+    $('#spyVoteProgress').textContent = 'Голосование · круг ' + g.round;
+    const voter = g.alive[SPYC.votesCast(g)];
+    if (!spy.ballotOpen) {
+      $('#spyVotePassTitle').textContent = 'Передайте телефон ' + voter;
+      $('#spyVotePass').classList.remove('hidden');
+      $('#spyBallot').classList.add('hidden');
+      return;
+    }
+    $('#spyVotePass').classList.add('hidden');
+    $('#spyBallot').classList.remove('hidden');
+    $('#spyBallotFor').textContent = voter + ', выбери одного. Голос тайный.';
+    spyRenderChips('#spyVoteChips', g.alive.filter(p => p !== voter), spy.chosenVote, 'vote');
+    $('#spyVoteConfirmBtn').disabled = spy.chosenVote === undefined;
+  }
+  // чипы: клики по индексам из spy.chipList — имена в разметке только видимый текст
+  function spyRenderChips(containerSel, list, selected, kind) {
+    spy.chipList = list.slice();
+    let html = list.map((p, i) =>
+      `<button type="button" class="spy-chip${selected === p ? ' sel' : ''}" data-i="${i}">${esc(p)}</button>`).join('');
+    if (kind === 'vote') {
+      html += `<button type="button" class="spy-chip spy-skip${selected === null ? ' sel' : ''}" data-i="skip">Пропустить</button>`;
+    }
+    $(containerSel).innerHTML = html;
+  }
+  $('#spyVoteShowBtn').addEventListener('click', () => {
+    const g = spy.game;
+    if (!g || g.phase !== 'vote') return;
+    spy.ballotOpen = true;
+    spy.chosenVote = undefined;
+    spyRenderVote();
+  });
+  $('#spyVoteChips').addEventListener('click', e => {
+    const b = e.target.closest('button[data-i]');
+    if (!b) return;
+    spy.chosenVote = b.dataset.i === 'skip' ? null : spy.chipList[Number(b.dataset.i)];
+    spyRenderVote();
+  });
+  $('#spyVoteConfirmBtn').addEventListener('click', () => {
+    const g = spy.game;
+    if (!g || g.phase !== 'vote') return;
+    if (spy.chosenVote === undefined) return toast('Выбери игрока или «Пропустить»');
+    const voter = g.alive[SPYC.votesCast(g)];
+    try { SPYC.castVote(g, voter, spy.chosenVote); } catch { return toast('Голос не принят'); }
+    spy.ballotOpen = false;
+    spy.chosenVote = undefined;
+    spyRenderPhase();   // следующий голосующий — или все проголосовали, и тогда итог
+  });
+
+  /* ── разрешение голосования и следующий круг ── */
+  function spyResolveVote() {
+    const g = spy.game;
+    if (!g || g.phase !== 'vote') return;
+    const beforeAlive = g.alive.slice();
+    try { SPYC.resolveVote(g); } catch { return; }
+    spy.ballotOpen = false;
+    if (g.phase === 'finished') spy.endHint = 'spy-caught';   // выбыли шпиона — партия кончена
+    else spy.lastEliminated = beforeAlive.find(p => !g.alive.includes(p)) || null;
+    spyRenderPhase();
+  }
+  function spyRenderVoteResult() {
+    const g = spy.game;
+    $('#spyVRProgress').textContent = 'Итог голосования · круг ' + g.round;
+    if (spy.lastEliminated) {
+      // роль выбывшего раскрывается публично; очки в разгар партии не показываем
+      $('#spyVRTitle').textContent = spy.lastEliminated + ' выбывает';
+      $('#spyVRNote').textContent = 'Это не шпион — партия продолжается.';
+    } else {
+      $('#spyVRTitle').textContent = 'Никто не выбывает';
+      $('#spyVRNote').textContent = '«Пропустить» набрал больше всех или голоса разделились.';
+    }
+  }
+  $('#spyNextRoundBtn').addEventListener('click', () => {
+    const g = spy.game;
+    if (!g || g.phase !== 'vote-result') return;
+    try { SPYC.continueAfterVote(g); } catch { return; }
+    if (g.phase === 'finished') spy.endHint = 'spy-auto-win';   // осталось двое
+    spyRenderPhase();
+  });
+
+  /* ── попытка шпиона назвать слово (доступна на любых активных фазах) ── */
+  function spyOpenGuess(fromScreen) {
+    const g = spy.game;
+    if (!g || g.phase === 'finished' || g.phase === 'reveal') return;
+    spy.returnScreen = fromScreen || activeScreenId();
+    spy.guessWho = undefined;
+    $('#spyGuessInput').value = '';
+    $('#spyGuessForm').classList.remove('hidden');
+    $('#spyGuessReject').classList.add('hidden');
+    spyRenderChips('#spyGuessChips', g.alive.slice(), undefined, 'guess');
+    spyShow('screen-spy-guess');
+  }
+  $('#spyGuessChips').addEventListener('click', e => {
+    const b = e.target.closest('button[data-i]');
+    if (!b) return;
+    spy.guessWho = spy.chipList[Number(b.dataset.i)];
+    $('#spyGuessChips').querySelectorAll('button').forEach(x => x.classList.toggle('sel', x === b));
+  });
+  $('#spyGuessBtn1').addEventListener('click', () => spyOpenGuess('screen-spy-draw'));
+  $('#spyGuessBtn2').addEventListener('click', () => spyOpenGuess('screen-spy-discussion'));
+  $('#spyGuessBtn3').addEventListener('click', () => spyOpenGuess('screen-spy-vote'));
+  $('#spyGuessBtn4').addEventListener('click', () => spyOpenGuess('screen-spy-vote-result'));
+  $('#spyGuessBack').addEventListener('click', () => spyRenderPhase());
+  $('#spyGuessReturnBtn').addEventListener('click', () => spyRenderPhase());
+  $('#spyGuessCheckBtn').addEventListener('click', () => {
+    const g = spy.game;
+    if (!g || g.phase === 'finished' || g.phase === 'reveal') return;
+    if (spy.guessWho === undefined) return toast('Выберите, кто назвал слово');
+    const text = $('#spyGuessInput').value.trim();
+    if (!text) return toast('Введите слово');
+    const before = Object.assign({}, g.scores);
+    let rejected = false;
+    try { SPYC.makeGuess(g, spy.guessWho, text); } catch { rejected = true; }
+    // отказ нейтральный: кто шпион, не раскрываем, партия не меняется
+    if (rejected || g.phase !== 'finished') {
+      $('#spyGuessForm').classList.add('hidden');
+      $('#spyGuessReject').classList.remove('hidden');
+      return;
+    }
+    // оба исхода завершают партию: +2 шпиону — угадал, иначе — раскрыт
+    spy.endHint = g.scores[g.spy] === (before[g.spy] || 0) + 2 ? 'spy-guessed' : 'spy-wrong-guess';
+    spyRenderPhase();
+  });
+
+  /* ── финал ── */
+  const SPY_END_TITLES = {
+    'spy-caught': 'Шпион пойман!',
+    'spy-guessed': 'Шпион угадал слово!',
+    'spy-wrong-guess': 'Шпион раскрыт',
+    'spy-auto-win': 'Шпион победил'
+  };
+  const SPY_END_NOTES = {
+    'spy-caught': 'Голосование указало на шпиона. Каждый мирный — включая выбывших раньше — получает по очку.',
+    'spy-guessed': 'Шпион верно назвал загаданное слово и получает два очка.',
+    'spy-wrong-guess': 'Попытка оказалась неверной: шпион раскрыт, все остальные получают по очку.',
+    'spy-auto-win': 'Осталось двое: шпион и один мирный. Шпион побеждает автоматически.'
+  };
+  function spyRenderFinal() {
+    const g = spy.game;
+    if (!g) return;
+    const r = g.result || {};
+    // причину берём из ядра, если она из зафиксированного контракта, иначе — из хода партии
+    const reason = (r.reason === 'spy-guessed' || r.reason === 'spy-wrong-guess')
+      ? r.reason
+      : (spy.endHint || 'spy-caught');
+    $('#spyFinalTitle').textContent = SPY_END_TITLES[reason] || 'Партия завершена';
+    $('#spyFinalWhy').textContent = SPY_END_NOTES[reason] || '';
+    $('#spyFinalSpy').textContent = g.spy;
+    $('#spyFinalWord').textContent = g.word;
+    const showCat = g.mode === 'normal' && !!g.category;
+    $('#spyFinalCatLine').classList.toggle('hidden', !showCat);
+    if (showCat) $('#spyFinalCat').textContent = g.category.name;
+    $('#spyFinalScores').innerHTML = g.players.map(p =>
+      `<div class="ph-result-row"><b>${esc(p)}</b><span class="ph-score">${g.scores[p] || 0}</span></div>`).join('');
+  }
+  $('#spyAgainBtn').addEventListener('click', () => {
+    const g = spy.game;
+    const players = g ? g.players.slice() : state.players.filter(Boolean);
+    const mode = g ? g.mode : spy.mode;
+    try {
+      spy.game = SPYC.createGame(players, mode, SPYD);   // новое слово/шпион, счёт с нуля
+    } catch { return toast('Не удалось начать новую партию'); }
+    spy.revealIdx = 0;
+    spy.ballotOpen = false;
+    spy.chosenVote = undefined;
+    spy.endHint = '';
+    spy.lastEliminated = null;
+    spyRenderPhase();
+  });
+  $('#spyGamesBtn').addEventListener('click', () => { spy.game = null; showScreen('screen-games'); });
+
+  /* ── выходы из активной партии ── */
+  // кнопки «Назад» в приложении: подтверждение, потом выброс партии
+  const spyExitConfirm = () => {
+    if (!confirm('Выйти из партии? Прогресс будет потерян.')) return;
+    spy.game = null;
+    showScreen('screen-games');
+  };
+  $('#spyRevealBack').addEventListener('click', spyExitConfirm);
+  $('#spyDrawBack').addEventListener('click', spyExitConfirm);
+  $('#spyDiscussBack').addEventListener('click', spyExitConfirm);
+  $('#spyVoteBack').addEventListener('click', spyExitConfirm);
+  $('#spyVoteResultBack').addEventListener('click', spyExitConfirm);
+  // системный «Назад» (popstate) и «К выбору игры» в настройках: партия выбрасывается молча
+  function spyOnHistory(targetId) {
+    const g = spy.game;
+    if (!g) { showScreen('screen-games'); return; }                 // партии нет — шпионские экраны недоступны
+    if (g.phase === 'finished') { spyRenderFinal(); spyShow('screen-spy-final'); return; }
+    if (targetId === 'screen-spy-guess') {
+      // диалог попытки живёт только в активной партии: перерисовываем пустую форму,
+      // чтобы не показать стухший экран прошлой партии
+      if (g.phase !== 'reveal') {
+        spy.returnScreen = SPY_PHASE_SCREENS[g.phase] || 'screen-games';
+        spy.guessWho = undefined;
+        $('#spyGuessInput').value = '';
+        $('#spyGuessForm').classList.remove('hidden');
+        $('#spyGuessReject').classList.add('hidden');
+        spyRenderChips('#spyGuessChips', g.alive.slice(), undefined, 'guess');
+      }
+      return;
+    }
+    spy.ballotOpen = false;
+    navFromPop = true;
+    spyRenderPhase();   // перерисовка по актуальной фазе: setup — её содержимое
+    navFromPop = false;
+  }
+  $('#setGamesBtn').addEventListener('click', spyAbandonIfUnfinished);
+
   /* ── FEAT-1: экран не засыпает во время партии (Screen Wake Lock) ── */
   let wakeLock = null;
   const GAME_SCREENS = ['screen-wheel', 'screen-choice', 'screen-reveal', 'screen-phrase-round', 'screen-phrase-task', 'screen-phrase-results',
-    'screen-dm-listen', 'screen-dm-draw', 'screen-dm-checks', 'screen-dm-check', 'screen-dm-results'];
+    'screen-dm-listen', 'screen-dm-draw', 'screen-dm-checks', 'screen-dm-check', 'screen-dm-results',
+    'screen-spy-reveal', 'screen-spy-draw', 'screen-spy-discussion', 'screen-spy-vote', 'screen-spy-vote-result', 'screen-spy-final'];
   async function keepAwake() {
     try {
       if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;

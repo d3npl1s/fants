@@ -1,0 +1,139 @@
+/* ═══════════════ Режим «Шпион» ═══════════════ */
+/* Все селекторы — с префиксом .spy- / .screen-spy-. Единственное исключение —
+   палитра карточки режима в общей карусели игр (.game-card[data-game="spy"]):
+   эта карточка рендерится общим кодом и по-другому адресовать её нельзя.
+   Палитра глубокого фиолетового → графит, язык карточек и кнопок общий. */
+
+.game-card[data-game="spy"] { --g1: #5e35b1; --g2: #263238; }
+
+.screen-spy-setup, .screen-spy-reveal, .screen-spy-draw, .screen-spy-discussion,
+.screen-spy-vote, .screen-spy-vote-result, .screen-spy-guess, .screen-spy-final {
+  background: linear-gradient(178deg, #5e35b1, #263238);
+}
+.screen-spy-final.active { display: flex; flex-direction: column; }
+
+/* ── центрированная рабочая область публичных экранов ── */
+.spy-center {
+  position: absolute; inset: 0; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; padding: calc(env(safe-area-inset-top, 0px) + 70px) 26px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  text-align: center;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .32) transparent;
+}
+.spy-center::-webkit-scrollbar { width: 8px; }
+.spy-center::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .32); border-radius: 4px; }
+.spy-center::-webkit-scrollbar-track { background: transparent; }
+
+/* ── настройки: переключатель сложности ── */
+.spy-mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.spy-mode-card {
+  display: flex; flex-direction: column; gap: 8px; text-align: left;
+  border: 2px solid rgba(255, 255, 255, .4); background: rgba(33, 38, 92, .5); color: #fff;
+  border-radius: 14px; padding: 14px 16px; font-family: inherit; font-size: 15px; font-weight: 700;
+  line-height: 1.35; cursor: pointer;
+}
+.spy-mode-card b { font-size: 17px; font-weight: 800; }
+.spy-mode-card span { opacity: .88; font-weight: 600; font-size: 13.5px; }
+.spy-mode-card.on { background: #fff; color: var(--navy); border-color: #fff; }
+
+.spy-players-line { font-size: 17px; font-weight: 800; margin-bottom: 12px; text-shadow: 0 3px 0 rgba(0, 0, 0, .18); }
+
+/* ── передача телефона / нейтральные заставки ── */
+.spy-pass-box {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  width: 100%; max-width: 420px;
+}
+.spy-pass-title { font-size: 30px; font-weight: 800; line-height: 1.3; text-shadow: 0 4px 0 rgba(0, 0, 0, .18); }
+.spy-pass-note { font-size: 15px; font-weight: 600; opacity: .95; line-height: 1.5; }
+
+/* ── секретная карточка роли ── */
+.spy-card {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: rgba(24, 27, 66, .55); border-radius: 22px; padding: 26px 22px;
+  box-shadow: var(--shadow); width: 100%; max-width: 440px;
+}
+.spy-card-name { font-size: 22px; font-weight: 800; opacity: .9; }
+.spy-card-role {
+  font-size: 30px; font-weight: 800; letter-spacing: 1px;
+  padding: 6px 22px; border-radius: 20px; background: rgba(255, 255, 255, .16);
+}
+.spy-card.is-spy .spy-card-role { background: #c2185b; }
+.spy-card-word {
+  font-size: 40px; font-weight: 800; line-height: 1.2;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, .2); word-break: break-word;
+}
+.spy-card-cat {
+  font-size: 16px; font-weight: 700; opacity: .9;
+  padding: 5px 16px; border-radius: 16px; background: rgba(255, 255, 255, .12);
+}
+.spy-card-note { font-size: 14px; font-weight: 600; opacity: .92; line-height: 1.45; }
+
+/* ── круг рисования и обсуждение ── */
+.spy-drawer { font-size: 40px; font-weight: 800; line-height: 1.2; text-shadow: 0 5px 0 rgba(0, 0, 0, .18); padding: 0 12px; }
+.spy-note {
+  font-size: 16px; font-weight: 700; opacity: .95;
+  padding: 6px 18px; border-radius: 18px; background: rgba(33, 38, 92, .55); box-shadow: var(--shadow);
+}
+
+/* ── общие действия режима ── */
+.spy-actions {
+  display: flex; flex-direction: column; gap: 12px;
+  width: 100%; max-width: 380px; align-items: stretch;
+}
+.spy-guess-btn { align-self: center; border-style: solid; border-color: rgba(255, 255, 255, .5); background: rgba(24, 27, 66, .4); }
+.spy-actions .done-btn:disabled, .spy-ballot .done-btn:disabled { opacity: .55; filter: grayscale(.5); }
+
+/* ── бюллетень тайного голосования и попытки шпиона ── */
+.spy-ballot {
+  display: flex; flex-direction: column; align-items: stretch; gap: 14px;
+  width: 100%; max-width: 440px; background: rgba(24, 27, 66, .55);
+  border-radius: 22px; padding: 22px 18px; box-shadow: var(--shadow);
+}
+.spy-ballot-for { text-align: center; font-size: 18px; font-weight: 800; line-height: 1.35; }
+.spy-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.spy-chips button {
+  border: 2px solid rgba(255, 255, 255, .4); background: rgba(33, 38, 92, .5); color: #fff;
+  font-family: inherit; font-size: 16px; font-weight: 800; cursor: pointer;
+  border-radius: 14px; padding: 14px 12px; text-align: center;
+  min-height: 48px; word-break: break-word;
+}
+.spy-chips button.sel { background: #fff; color: var(--navy); border-color: #fff; }
+.spy-chips button.spy-skip.sel { background: #ffd166; border-color: #ffd166; }
+.spy-guess-input {
+  width: 100%; height: 56px; border: none; border-radius: 14px; padding: 0 16px;
+  font-family: inherit; font-size: 19px; font-weight: 800; color: var(--navy);
+  background: rgba(255, 255, 255, .95); outline: none; box-shadow: var(--shadow);
+}
+.spy-guess-input::placeholder { color: #5f6795; font-weight: 500; }
+
+/* ── итог голосования и финал ── */
+.spy-vr-box {
+  display: flex; flex-direction: column; gap: 10px; align-items: center;
+  background: rgba(24, 27, 66, .55); border-radius: 18px; padding: 20px 22px;
+  box-shadow: var(--shadow); width: 100%; max-width: 460px;
+}
+.spy-vr-title { font-size: 26px; font-weight: 800; line-height: 1.3; text-align: center; }
+.spy-vr-note { font-size: 15px; font-weight: 600; opacity: .95; line-height: 1.5; text-align: center; }
+.spy-final-why { margin: 2px 0 6px; }
+.spy-reveal-line { font-size: 18px; font-weight: 600; text-align: left; }
+.spy-reveal-line b { font-weight: 800; color: #ffd166; }
+
+/* ── desktop: от 1024px ── */
+@media (min-width: 1024px) {
+  .spy-center { gap: 22px; }
+  .spy-pass-title { font-size: 34px; }
+  .spy-drawer { font-size: 48px; }
+  .spy-card-word { font-size: 46px; }
+  .spy-card, .spy-ballot, .spy-vr-box { max-width: 520px; }
+  .spy-pass-box { max-width: 460px; }
+  .spy-actions { max-width: 420px; }
+}
+
+/* ── ландшафт / низкие экраны ── */
+@media (max-height: 480px) {
+  .spy-center { padding-top: calc(env(safe-area-inset-top, 0px) + 46px); gap: 10px; }
+  .spy-pass-title { font-size: 22px; }
+  .spy-drawer { font-size: 28px; }
+  .spy-card-word { font-size: 26px; }
+  .spy-card { padding: 14px 16px; gap: 8px; }
+}
