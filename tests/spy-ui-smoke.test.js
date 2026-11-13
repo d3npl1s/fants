@@ -173,8 +173,8 @@ ok(!html.includes('spyFinalResetBtn'),
 
 /* 12. Версия согласована (бамп делает менеджер одним релизным коммитом) */
 const ver = (sw.match(/const VERSION = '([\d.]+)';/) || [])[1];
-ok(ver === '1.8.2', 'sw.js: VERSION 1.8.2 (ревью: очки партии, единый выход)');
-ok(html.includes(`?v=${ver}`) && html.includes('версия 1.8.2'),
+ok(ver === '1.8.3', 'sw.js: VERSION 1.8.3 (коллективный вердикт попытки)');
+ok(html.includes(`?v=${ver}`) && html.includes('версия 1.8.3'),
    'index.html: ?v= и main-ver совпадают с VERSION');
 
 console.log('SPY-UI smoke: ' + n + ' проверок пройдено');
