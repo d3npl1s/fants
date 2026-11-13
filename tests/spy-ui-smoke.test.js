@@ -128,8 +128,8 @@ ok(core.includes('function mergeScores'),
 
 /* 12. Версия согласована (бамп делает менеджер одним релизным коммитом) */
 const ver = (sw.match(/const VERSION = '([\d.]+)';/) || [])[1];
-ok(ver === '1.8.0', 'sw.js: VERSION 1.8.0 (релиз шпиона)');
-ok(html.includes(`?v=${ver}`) && html.includes('версия 1.8.0'),
+ok(ver === '1.8.1', 'sw.js: VERSION 1.8.1 (UX-пакет + накопительный счёт)');
+ok(html.includes(`?v=${ver}`) && html.includes('версия 1.8.1'),
    'index.html: ?v= и main-ver совпадают с VERSION');
 
 console.log('SPY-UI smoke: ' + n + ' проверок пройдено');
