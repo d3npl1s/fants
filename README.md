@@ -159,6 +159,8 @@ node tests/spin-cancel.test.js  # отмена прокрутки колеса (
 node tests/spy-data.test.js     # база слов «Шпиона» (дубли, категории)
 node tests/spy-core.test.js     # правила «Шпиона» (детерминированные, rnd-инъекция)
 node tests/spy-ui-smoke.test.js # статическая интеграция «Шпиона» (подключение, CORE, API)
+node tests/spy-layout.test.js   # мобильная вёрстка «Шпиона» (скролл настроек, «Пропустить»)
+node tests/global-menu.test.js  # общее меню (контекстность, безопасный выход, точки)
 for f in js/*.js tests/*.js; do node --check "$f"; done   # синтаксис
 ```
 

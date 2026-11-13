@@ -573,48 +573,35 @@ for (const guess of ['correct', 'wrong']) {
   }
 }
 
-/* ═══ SPY-SCORE (04): mergeScores — накопительный счёт между партиями ═══ */
+/* ═══ SPY-SCORE (04, решение владельца): очки — только внутри одной партии ═══ */
 {
-  const m1 = SC.mergeScores({}, { Аня: 0, Боря: 1, Вика: 1, Глеб: 1 });
-  eq(m1, { Аня: 0, Боря: 1, Вика: 1, Глеб: 1 }, 'mergeScores: первая партия ложится как есть');
-  const m2 = SC.mergeScores(m1, { Аня: 0, Боря: 0, Вика: 2, Глеб: 0 });
-  eq(m2, { Аня: 0, Боря: 1, Вика: 3, Глеб: 1 }, 'mergeScores: вторая партия суммируется (0 1 3 1)');
-  const m3 = SC.mergeScores(m2, { Аня: 0, Боря: 0, Вика: 2, Глеб: 0 });
-  eq(m3.Вика, 5, 'mergeScores: три партии подряд накапливаются');
-  const total = { Аня: 1 };
-  const party = { Аня: 2, Новый: 4 };
-  SC.mergeScores(total, party);
-  eq(total, { Аня: 1 }, 'mergeScores: аргумент total не мутируется');
-  eq(party, { Аня: 2, Новый: 4 }, 'mergeScores: аргумент party не мутируется');
-  eq(SC.mergeScores(null, { Аня: 1 }), { Аня: 1 }, 'mergeScores: null вместо total допустим');
-  eq(SC.mergeScores({ Аня: 2 }, null), { Аня: 2 }, 'mergeScores: null вместо party допустим');
-  eq(SC.mergeScores({}, {}), {}, 'mergeScores: два пустых — пусто');
-  eq(SC.mergeScores({ Аня: 3, Боря: 'мусор' }, { Аня: 1 }), { Аня: 4 }, 'mergeScores: нечисловое значение игнорируется');
-  // 04: регресс владельца — два ошибочных изгнания в разных кругах дают шпиону ровно 2,
+  // регресс владельца: два ошибочных изгнания в разных кругах дают шпиону ровно 2,
   // и очки не исчезают при переходе круга (внутри одной партии)
-  {
-    const g = SC.createGame(R4, 'normal', DATA, rng(11));
-    SC.startGame(g);
-    const spy = g.spy;
-    const civilians = g.players.filter(p => p !== spy);
-    // круг 1: выгоняем первого мирного (все голосуют за него, он — пропуск)
-    finishDrawing(g);
-    SC.openVote(g);
-    g.alive.forEach(v => ok(SC.castVote(g, v, v === civilians[0] ? null : civilians[0]), `04: голос ${v}`));
-    SC.resolveVote(g);
-    eq(g.scores[spy], 1, '04: шпион +1 после первого ошибочного изгнания');
-    SC.continueAfterVote(g);
-    eq(g.scores[spy], 1, '04: очки не исчезают при переходе к следующему кругу');
-    // круг 2: выгоняем второго мирного
-    finishDrawing(g);
-    SC.openVote(g);
-    g.alive.forEach(v => ok(SC.castVote(g, v, v === civilians[1] ? null : civilians[1]), `04: голос круга 2 — ${v}`));
-    SC.resolveVote(g);
-    eq(g.scores[spy], 2, '04: шпион ровно +2 после двух изгнаний (не 1)');
-    SC.continueAfterVote(g);
-    ok(g.phase === 'finished' && g.result.outcome === 'spy-auto-win', '04: осталось двое — автопобеда шпиона');
-    eq(g.scores[spy], 2, '04: автопобеда не добавляет очков сверх +1 за изгнания');
-  }
+  const g = SC.createGame(R4, 'normal', DATA, rng(11));
+  SC.startGame(g);
+  const spy = g.spy;
+  const civilians = g.players.filter(p => p !== spy);
+  // круг 1: выгоняем первого мирного (все голосуют за него, он — пропуск)
+  finishDrawing(g);
+  SC.openVote(g);
+  g.alive.forEach(v => ok(SC.castVote(g, v, v === civilians[0] ? null : civilians[0]), `04: голос ${v}`));
+  SC.resolveVote(g);
+  eq(g.scores[spy], 1, '04: шпион +1 после первого ошибочного изгнания');
+  SC.continueAfterVote(g);
+  eq(g.scores[spy], 1, '04: очки не исчезают при переходе к следующему кругу');
+  // круг 2: выгоняем второго мирного
+  finishDrawing(g);
+  SC.openVote(g);
+  g.alive.forEach(v => ok(SC.castVote(g, v, v === civilians[1] ? null : civilians[1]), `04: голос круга 2 — ${v}`));
+  SC.resolveVote(g);
+  eq(g.scores[spy], 2, '04: шпион ровно +2 после двух изгнаний (не 1)');
+  SC.continueAfterVote(g);
+  ok(g.phase === 'finished' && g.result.outcome === 'spy-auto-win', '04: осталось двое — автопобеда шпиона');
+  eq(g.scores[spy], 2, '04: автопобеда не добавляет очков сверх +1 за изгнания');
+  // накопления МЕЖДУ партиями нет: новая партия начинается с нулевого счёта
+  const g2 = SC.createGame(g.players, g.mode, DATA, rng(12));
+  eq(Object.values(g2.scores).every(v => v === 0), true, '04: новая партия начинается с нулевыми очками');
+  eq(SC.mergeScores, undefined, '04: mergeScores удалена из ядра (решение владельца)');
 }
 
 /* ═══ итог ═══ */

@@ -118,34 +118,40 @@ ok(/<button class="set-row set-btn" id="setMainMenuBtn">\s*<span>Главное 
 ok(html.indexOf('id="setMainMenuBtn"') < html.indexOf('id="settingsCloseBtn"'),
    '«Главное меню» внутри карточки настроек, до «Закрыть»');
 
-const menuBlock = between(app, 'MENU-HOME: «Главное меню»', 'FEAT-1');
+const menuBlock = between(app, 'MENU-HOME/MENU-EXIT: единый безопасный выход', 'FEAT-1');
 const mmHandler = between(menuBlock, "$('#setMainMenuBtn').addEventListener('click'", '');
-ok(mmHandler.includes("if (!confirmMainMenuExit()) return;") &&
-   mmHandler.indexOf('confirmMainMenuExit()') < mmHandler.indexOf("closeModal('#settingsModal')"),
-   'отказ в подтверждении оставляет меню и режим нетронутыми');
-ok(mmHandler.includes("closeModal('#settingsModal')") &&
-   mmHandler.indexOf("closeModal('#settingsModal')") < mmHandler.indexOf("showScreen('screen-main')"),
-   'модалка закрывается по существующим правилам, затем переход на screen-main');
-ok(mmHandler.includes('stopActiveEngines()'), 'выход останавливает движки активного режима');
+ok(mmHandler.includes("exitViaMenu('screen-main', 'в главное меню')"),
+   '«Главное меню» идёт через общий безопасный маршрут и ведёт на screen-main');
+const gamesHandler = between(menuBlock, "$('#setGamesBtn').addEventListener('click'", '');
+ok(gamesHandler.includes("exitViaMenu('screen-games', 'к выбору игры')"),
+   '«К выбору игры» идёт через тот же маршрут и ведёт на screen-games (не подменён главным меню)');
+const exitFn = between(menuBlock, 'function exitViaMenu', "$('#setMainMenuBtn')");
+ok(exitFn.includes('if (!confirmExitActiveMode(whereLabel)) return;') &&
+   exitFn.indexOf('confirmExitActiveMode') < exitFn.indexOf("closeModal('#settingsModal')") &&
+   exitFn.indexOf("closeModal('#settingsModal')") < exitFn.indexOf('stopActiveEngines()') &&
+   exitFn.indexOf('stopActiveEngines()') < exitFn.indexOf('showScreen(targetId)'),
+   'единый маршрут: подтверждение → закрыть меню → остановить движки → целевой экран');
+ok(app.split("$('#setGamesBtn').addEventListener").length - 1 === 1 &&
+   !app.includes("addEventListener('click', spyAbandonIfUnfinished)"),
+   'у «К выбору игры» ровно один обработчик — безусловный сброс партии удалён');
 
-ok(/\$\('#setGamesBtn'\)\.addEventListener\('click', \(\) => \{\s*closeModal\('#settingsModal'\);\s*showScreen\('screen-games'\);/.test(app),
-   '«К выбору игры» по-прежнему ведёт на screen-games (не подменён главным меню)');
-
-/* ── 7. Незавершённая партия «Шпиона»: подтверждение, при отказе партия цела ── */
-const confirmExit = between(menuBlock, 'function confirmMainMenuExit', 'function stopActiveEngines');
+/* ── 7. Незавершённая партия «Шпиона»/круг «Фразы»: подтверждение, при отказе всё цело ── */
+const confirmExit = between(menuBlock, 'function confirmExitActiveMode', 'function stopActiveEngines');
 ok(confirmExit.includes("startsWith('screen-spy-')") &&
    confirmExit.includes('spy.game && spy.game.phase'),
    'подтверждение только для незавершённой партии «Шпиона» на его экранах');
-const spyConfirmIdx = confirmExit.indexOf("confirm('Выйти в главное меню? Незавершённая партия");
+const spyConfirmIdx = confirmExit.indexOf('Незавершённая партия «Шпиона» будет потеряна');
 const spyNullIdx = confirmExit.indexOf('spy.game = null');
 ok(spyConfirmIdx >= 0 && spyNullIdx > spyConfirmIdx,
    'партия сбрасывается только ПОСЛЕ согласия на подтверждении');
 ok(confirmExit.includes("return false;") &&
    confirmExit.indexOf('return false;') < spyNullIdx,
    'при отказе — ранний выход, партия «Шпиона» не теряется');
+ok(confirmExit.includes('Прогресс круга пропадёт'),
+   'незавершённый круг «Продолжи фразу» предупреждает о потере прогресса');
 
 /* ── 8. Движки остановлены, данные не тронуты ── */
-const stopEngines = between(menuBlock, 'function stopActiveEngines', "$('#setMainMenuBtn')");
+const stopEngines = between(menuBlock, 'function stopActiveEngines', 'function exitViaMenu');
 ['cancelSpin()', 'stopTaskTimer()', 'stopSpeak()', 'clearTimeout(phrase.pairTimer)', 'dmStopEngine()']
   .forEach(fn => ok(stopEngines.includes(fn), `stopActiveEngines вызывает ${fn}`));
 ok(stopEngines.includes('drawLeft') && stopEngines.includes('drawEndsAt') &&

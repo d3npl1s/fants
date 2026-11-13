@@ -2069,10 +2069,8 @@
     closeModal('#settingsModal');
     renderStats('Статистика фантов');
   });
-  $('#setGamesBtn').addEventListener('click', () => {
-    closeModal('#settingsModal');
-    showScreen('screen-games');
-  });
+  // MENU-EXIT: «К выбору игры» идёт через общий безопасный маршрут exitViaMenu
+  // (обработчик рядом с «Главное меню», после stopActiveEngines)
 
   function syncSoundIcons() {
     $('#soundOnIcon').classList.toggle('hidden', !state.sound);
@@ -2206,9 +2204,7 @@
     chipList: [],           // имена текущих чипов — клики идут по индексам, не по именам
     returnScreen: '',       // экран, из которого открыли попытку шпиона
     endHint: '',            // кто завершил партию (выводится из порядка вызовов core)
-    lastEliminated: null,   // кого исключило последнее голосование (мирный)
-    totalScores: store.get('spyScores', {}),  // SPY-SCORE: накопительный счёт между партиями
-    scoreApplied: null      // партия, уже учтённая в totalScores (защита от двойного начисления)
+    lastEliminated: null    // кого исключило последнее голосование (мирный)
   };
   const SPY_PHASE_SCREENS = {
     reveal: 'screen-spy-reveal', draw: 'screen-spy-draw', discussion: 'screen-spy-discussion',
@@ -2540,13 +2536,6 @@
   function spyRenderFinal() {
     const g = spy.game;
     if (!g) return;
-    // SPY-SCORE (04): очки партии попадают в накопительный счёт ровно один раз —
-    // при первом рендере финала; повторные рендеры (история/возврат) не удваивают
-    if (spy.scoreApplied !== g) {
-      spy.scoreApplied = g;
-      spy.totalScores = SPYC.mergeScores(spy.totalScores, g.scores);
-      store.set('spyScores', spy.totalScores);
-    }
     const r = g.result || {};
     // SPY-INT (05): единственный источник истины — result.outcome из ядра;
     // endHint остаётся только последнимfallback'ом на случай битого result
@@ -2558,21 +2547,11 @@
     const showCat = g.mode === 'normal' && !!g.category;
     $('#spyFinalCatLine').classList.toggle('hidden', !showCat);
     if (showCat) $('#spyFinalCat').textContent = g.category.name;
-    // SPY-SCORE: таблица показывает накопительный счёт (партии прошлые + эта),
-    // игроки вне текущей партии в таблице не теряются — остаются в хранилище
+    // SPY-SCORE (04, решение владельца): таблица показывает очки ТЕКУЩЕЙ партии —
+    // между кругами внутри партии очки копятся, «Сыграть ещё раз» начинает с нуля
     $('#spyFinalScores').innerHTML = g.players.map(p =>
-      `<div class="ph-result-row"><b>${esc(p)}</b><span class="ph-score">${spy.totalScores[p] || 0}</span></div>`).join('');
+      `<div class="ph-result-row"><b>${esc(p)}</b><span class="ph-score">${g.scores[p] || 0}</span></div>`).join('');
   }
-  // SPY-SCORE: сброс накопительного счёта — только по явному подтверждению.
-  // scoreApplied НЕ трогаем: перерисовки финала этой же партии не должны
-  // заново влить её очки в только что очищенный счёт
-  $('#spyFinalResetBtn').addEventListener('click', () => {
-    if (!confirm('Сбросить накопительный счёт «Шпиона»?')) return;
-    spy.totalScores = {};
-    store.set('spyScores', spy.totalScores);
-    toast('Накопительный счёт сброшен');
-    if (spy.game) spyRenderFinal();   // перерисовать таблицу нулями
-  });
   $('#spyAgainBtn').addEventListener('click', () => {
     const g = spy.game;
     const players = g ? g.players.slice() : state.players.filter(Boolean);
@@ -2624,22 +2603,27 @@
     spyRenderPhase();   // перерисовка по актуальной фазе: setup — её содержимое
     navFromPop = false;
   }
-  $('#setGamesBtn').addEventListener('click', spyAbandonIfUnfinished);
+  // MENU-EXIT: безусловный сброс партии через setGamesBtn удалён — оба маршрута
+  // меню идут через exitViaMenu (подтверждение + остановка движков); оставшийся
+  // вызов spyAbandonIfUnfinished — только системный «Назад» (popstate), где
+  // confirm блокировать нельзя (согласовано в раунде «Шпиона»)
 
-  /* ── MENU-HOME: «Главное меню» — на #screen-main без потери данных ──
+  /* ── MENU-HOME/MENU-EXIT: единый безопасный выход из меню — «Главное меню»
+     (screen-main) и «К выбору игры» (screen-games) идут через одну логику ──
      Игроки/настройки/статистика — в хранилище, их переход не трогает.
      Незавершённый прогресс не теряется молча: у шпиона партия живёт только в
      памяти — confirm; у фразы незавершённый круг — то же подтверждение, что у
-     кнопки «Назад» с экрана пары. У Draw Memory прогресс сохраняется сам. */
-  function confirmMainMenuExit() {
+     кнопки «Назад» с экрана пары. У Draw Memory прогресс сохраняется сам.
+     Отказ — состояние игры не меняется вообще. */
+  function confirmExitActiveMode(whereLabel) {
     const act = activeScreenId();
     if (String(act).startsWith('screen-spy-') && spy.game && spy.game.phase !== 'finished') {
-      if (!confirm('Выйти в главное меню? Незавершённая партия «Шпиона» будет потеряна.')) return false;
+      if (!confirm(`Выйти ${whereLabel}? Незавершённая партия «Шпиона» будет потеряна.`)) return false;
       spy.game = null;
       return true;
     }
     if ((act === 'screen-phrase-round' || act === 'screen-phrase-task') && (phrase.current || phrase.queue.length)) {
-      if (!confirm('Выйти в главное меню? Прогресс круга пропадёт.')) return false;
+      if (!confirm(`Выйти ${whereLabel}? Прогресс круга пропадёт.`)) return false;
       phrase.current = null;
     }
     return true;
@@ -2664,12 +2648,15 @@
     dmStopEngine();
     if (dm.round) dmSave();
   }
-  $('#setMainMenuBtn').addEventListener('click', () => {
-    if (!confirmMainMenuExit()) return;   // отказ — остаёмся в режиме, партия цела
+  // общий маршрут: подтверждение → закрыть меню → остановить движки → целевой экран
+  function exitViaMenu(targetId, whereLabel) {
+    if (!confirmExitActiveMode(whereLabel)) return;   // отказ — остаёмся в режиме, всё цело
     closeModal('#settingsModal');
     stopActiveEngines();
-    showScreen('screen-main');
-  });
+    showScreen(targetId);
+  }
+  $('#setMainMenuBtn').addEventListener('click', () => exitViaMenu('screen-main', 'в главное меню'));
+  $('#setGamesBtn').addEventListener('click', () => exitViaMenu('screen-games', 'к выбору игры'));
 
   /* ── FEAT-1: экран не засыпает во время партии (Screen Wake Lock) ── */
   let wakeLock = null;

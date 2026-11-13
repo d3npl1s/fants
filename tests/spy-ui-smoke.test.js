@@ -110,25 +110,20 @@ ok(app.includes("$('#spyGuessBtn4').classList.toggle('hidden', caught)"),
 ok(app.includes("'Показать итоги'"),
    'кнопка после поимки шпиона ведёт в итоги, а не «следующий круг»');
 
-/* 11a. SPY-SCORE (04): накопительный счёт между партиями и кнопка сброса */
-ok(app.includes('SPYC.mergeScores(spy.totalScores, g.scores)'),
-   'очки партии вливаются в накопительный счёт через SPYC.mergeScores');
-ok(app.includes("store.get('spyScores'") && app.includes("store.set('spyScores'"),
-   'накопительный счёт хранится в fant.spyScores (переживает перезагрузку)');
-ok(app.includes('spy.scoreApplied !== g'),
-   'партия учитывается в счёте ровно один раз (гард повторного рендера)');
-ok(!app.includes('spy.scoreApplied = null;'),
-   'после сброса счёта гард не снимается — партия не вольётся повторно');
-ok(html.includes('id="spyFinalResetBtn"'),
-   'кнопка сброса накопительного счёта есть на финальном экране');
-ok(app.includes("$('#spyFinalResetBtn').addEventListener") && app.includes("Сбросить накопительный счёт"),
-   'сброс идёт через confirm и не выполняется молча');
-ok(core.includes('function mergeScores'),
-   'mergeScores живёт в ядре как чистая функция (без localStorage)');
+/* 11a. SPY-SCORE (04, решение владельца): очки только текущей партии,
+        накопительного рейтинга между партиями нет */
+ok(/spyFinalScores.*g\.scores\[p\]/s.test(app),
+   'финальная таблица показывает очки текущей партии (g.scores)');
+ok(!app.includes('spyScores') && !app.includes('totalScores') && !app.includes('scoreApplied'),
+   'накопительный счёт и его хранилище полностью удалены из UI');
+ok(!core.includes('mergeScores'),
+   'mergeScores удалена из ядра');
+ok(!html.includes('spyFinalResetBtn'),
+   'кнопка сброса накопительного счёта убрана с финального экрана');
 
 /* 12. Версия согласована (бамп делает менеджер одним релизным коммитом) */
 const ver = (sw.match(/const VERSION = '([\d.]+)';/) || [])[1];
-ok(ver === '1.8.1', 'sw.js: VERSION 1.8.1 (UX-пакет + накопительный счёт)');
+ok(ver === '1.8.1', 'sw.js: VERSION 1.8.1 (UX-пакет)');
 ok(html.includes(`?v=${ver}`) && html.includes('версия 1.8.1'),
    'index.html: ?v= и main-ver совпадают с VERSION');
 
