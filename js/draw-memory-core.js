@@ -185,13 +185,13 @@
      дедлайн обнуляется; возвращает остаток в секундах. Возобновление —
      в app.js (dmOpenDraw восстанавливает drawEndsAt из drawLeft), при
      drawLeft === 0 раунд должен уйти в проверки, а не получить «∞».
-     Идемпотентна: дедлайна уже нет (заморожено раньше) — состояние не
-     меняется, возвращается сохранённый drawLeft. Битый раунд — 0. */
+     Идемпотентна: если замораживать нечего (дедлайна уже нет, битый или
+     пустой раунд) — возвращается null и состояние не меняется вовсе.
+     Различие 0 и null существенно: 0 — «заморозка произошла, время вышло»,
+     null — «заморозки не было». */
   function freezeDrawDeadline(round, now) {
-    if (!round || typeof round !== 'object') return 0;
-    const left = round.drawEndsAt
-      ? Math.max(0, Math.ceil((round.drawEndsAt - now) / 1000))
-      : Math.max(0, Math.floor(Number(round.drawLeft) || 0));
+    if (!round || typeof round !== 'object' || !round.drawEndsAt) return null;
+    const left = Math.max(0, Math.ceil((round.drawEndsAt - now) / 1000));
     round.drawLeft = left;
     round.drawEndsAt = 0;
     return left;
