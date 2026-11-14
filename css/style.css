@@ -450,6 +450,14 @@ body {
 .act-btn.ok span { background: #fff; color: var(--navy); }
 .act-btn.no span { background: rgba(24, 27, 66, .55); color: #fff; border: 2px solid rgba(255,255,255,.45); }
 .act-btn:active { transform: scale(.95); }
+/* UI-3: на узких экранах «Выполнено / Не выполнено» вылезали за края
+   (320: −27px слева, +27 справа; 360: ±7px) — компактнее кнопки и зазор,
+   wrap как страховка: если что-то всё же не влезает, кнопка встанет ниже,
+   а не обрежется краем экрана */
+@media (max-width: 399px) {
+  .action-row { gap: 10px; flex-wrap: wrap; }
+  .act-btn span { padding: 14px 14px; font-size: 16px; }
+}
 
 /* ═══════════ Спин-оверлей ═══════════ */
 .spin-overlay {
@@ -747,6 +755,21 @@ button.set-btn b { opacity: .85; font-weight: 800; }
   animation: toastIn .25s ease;
 }
 @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(12px); } }
+/* UI-2: на экране выбора тост «Зажми карточку…» накрывал нижние строки задания
+   (360×740, длинные задания — до 102px текста под тостом). Пока активен экран
+   выбора, тост уходит компактным в верхнюю безопасную зону: карточки не
+   перекрываются ни при какой длине задания. #toast идёт в DOM после секций —
+   работает обычный sibling-селектор без :has(). На остальных экранах тост
+   остаётся внизу как был */
+#screen-choice.active ~ #toast {
+  bottom: auto;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  width: max-content;              /* left:50% без этого сжимает available до половины экрана */
+  max-width: calc(100vw - 24px);   /* компактно, но 2 строки вместо 3–4 */
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 9px 12px;
+}
 
 @media (max-width: 380px) {
   .reveal-type { font-size: 46px; }
