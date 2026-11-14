@@ -182,9 +182,14 @@
       const pool = list.filter(p => p !== answerer);
       who = pickFrom(pool.length ? pool : list);   // 1 игрок: некому импровизировать — берём его же
     }
-    // PHRASE-6: other — всегда отличный от who участник, если он существует;
-    // при 2 игроках это второй (может быть отвечающим), дубля who нет
-    const otherPool = list.filter(p => p !== who);
+    // PHRASE-6 + контракт: other ≠ who всегда; при 3+ other также ≠ отвечающего
+    // (попарная различимость who/other/answerer); при 2 игроках other = отвечающий —
+    // единственный второй, дубля who нет
+    let otherPool = list.filter(p => p !== who);
+    if (otherPool.length > 1) {
+      const noAnswerer = otherPool.filter(p => p !== answerer);
+      if (noAnswerer.length) otherPool = noAnswerer;
+    }
     const other = otherPool.length ? pickFrom(otherPool) : who;
     return { who, other, template: clean };
   }
