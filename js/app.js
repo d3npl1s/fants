@@ -116,11 +116,36 @@
     if (!$('#banPopup').classList.contains('hidden')) { hideBanPopup(); return; }
     const st = e.state || {};
     if (st.fant && st.fant !== activeScreenId()) {
+      const act0 = activeScreenId();
+      // AUDIT-01: уход системной кнопкой с активного задания гасит его таймер
+      // и озвучку — они не продолжают жить на скрытом экране
+      if (act0 === 'screen-reveal') { stopTaskTimer(); stopSpeak(); }
+      // AUDIT-02: уход с активной дорисовки DM (системная кнопка) замораживает
+      // дедлайн — остаток уходит в drawLeft и сохраняется, таймер не тикает в фоне
+      if (act0 === 'screen-dm-draw' && dm.round && dm.round.phase === 'draw') {
+        DMC.freezeDrawDeadline(dm.round, Date.now());
+        dmSave();
+        dmStopEngine();
+      }
       // DM-1: уход с экранов режима системной кнопкой «Назад» глушит его голос и таймеры
       if (!String(st.fant).startsWith('screen-dm-')) dmStopEngine();
+      // AUDIT-01: мёртвые экраны хода не resurrect'ятся: после завершения хода
+      // старые choice/reveal в истории без живого pending заменяются колесом,
+      // экран задания фразы без неоценённой пары — экраном круга
+      let target = st.fant;
+      if ((target === 'screen-choice' || target === 'screen-reveal') && !pending) target = 'screen-wheel';
+      if (target === 'screen-phrase-task' && (!phrase.current || phrase.current.rated)) target = 'screen-phrase-round';
       navFromPop = true;
-      showScreen(st.fant);
+      showScreen(target);
       navFromPop = false;
+      if (target !== st.fant) { try { history.replaceState({ fant: target }, ''); } catch {} }
+      // AUDIT-02: возврат на дорисовку продолжает с сохранённого остатка; listen
+      // перерисовывается безопасной паузой, а не застывшим чтением слов
+      if (st.fant === 'screen-dm-draw' && dm.round && dm.round.phase === 'draw') {
+        navFromPop = true; dmOpenDraw(); navFromPop = false;
+      } else if (st.fant === 'screen-dm-listen' && dm.round && dm.round.phase !== 'done') {
+        navFromPop = true; dmOpenListen('hub'); navFromPop = false;
+      }
       // SPY-NAV: «Назад» наружу из режима шпиона выбрасывает незавершённую партию
       // (без confirm — блокировать системную кнопку нельзя), «Назад» внутрь —
       // перерисовывает экран по актуальной фазе, старые состояния не показываются
@@ -1219,13 +1244,21 @@
     $('#pairSpinBtn').classList.remove('hidden');
     $('#phraseGoBtn').classList.add('hidden');
     $('#pairCaption').textContent = 'Выберите пару!';
+    // AUDIT-01: панель оценки, выбор балла и кнопка подтверждения не переживают
+    // пару — UI синхронен состоянию, повторная оценка не показывается вовсе
+    $('#ratePanel').classList.add('hidden');
+    document.querySelectorAll('.rate-btn.sel').forEach(x => x.classList.remove('sel'));
+    $('#rateConfirmBtn').classList.add('hidden');
     // после последней пары queue пуст — не показываем «Пара N+1 из N»
     const done = state.players.length - phrase.queue.length;
     $('#phProgress').textContent = 'Пара ' + Math.min(done + 1, state.players.length) + ' из ' + state.players.length;
   }
 
   function drawPair() {
-    return phrase.queue.shift();
+    const p = phrase.queue.shift();
+    // AUDIT-01: флаг оценки живёт в состоянии пары — повторная запись исключена
+    // не только скрытием панели, но и guard'ом в обработчике подтверждения
+    return p ? Object.assign(p, { rated: false }) : p;
   }
 
   function spinColumns(reader, answerer) {
@@ -1361,15 +1394,23 @@
     }
     // шаг 2: подтверждение — записываем оценку
     if (e.target.closest('#rateConfirmBtn')) {
+      // AUDIT-01: одна пара — одна оценка. Guard по состоянию пары, а не только
+      // по скрытию панели: повторное подтверждение (Back, повторный показ) не
+      // увеличивает phrase.scores и phStats второй раз
+      const cur = phrase.current;
+      if (!cur || cur.rated) return;
       const sel = document.querySelector('.rate-btn.sel');
+      if (!sel) return toast('Выберите оценку');
+      cur.rated = true;   // фиксируем ДО записи — защита и от гонок двойного тапа
       const r = parseInt(sel.dataset.r, 10);
-      const who = phrase.current.answerer;
+      const who = cur.answerer;
       phrase.scores[who].push(r);
       if (!phStats[who]) phStats[who] = { sum: 0, count: 0 };
       phStats[who].sum += r; phStats[who].count++;
       store.set('phStats', phStats);
       document.querySelectorAll('.rate-btn').forEach(x => x.classList.remove('sel'));
       $('#rateConfirmBtn').classList.add('hidden');
+      $('#ratePanel').classList.add('hidden');
       if (!phrase.queue.length) return showPhResults();
       resetPairScreen();
       showScreen('screen-phrase-round');
@@ -1399,6 +1440,8 @@
 
   function showPhResults() {
     clearTimeout(phrase.pairTimer);
+    phrase.current = null;   // AUDIT-01: круг завершён — старой пары больше нет,
+    // Back на её экран задания ведёт на безопасный экран, а не в прошлую оценку
     const rows = state.players.map(nm => {
       const arr = phrase.scores[nm] || [];
       return { nm, sum: arr.reduce((a, b) => a + b, 0) };
@@ -1746,10 +1789,17 @@
     dmStopEngine();
     r.phase = 'draw';
     if (r.drawLeft > 0) { r.drawEndsAt = Date.now() + r.drawLeft * 1000; r.drawLeft = 0; }
+    // AUDIT-02: таймер был ограниченным (настройка > 0), но остаток нулевой —
+    // время вышло, пока раунд был на паузе: к проверкам, а не «∞»
+    const timed = dm.settings.drawSecs > 0;
     dmSave();
     showScreen('screen-dm-draw');
+    if (!r.drawEndsAt) {
+      if (timed) return dmOpenChecks();   // ограниченный таймер не превращается в бесконечный
+      tmrInfinity();                      // вариант «без таймера»
+      return;
+    }
     const tmr = $('#dmDrawTime');
-    if (!r.drawEndsAt) { tmr.textContent = '∞'; return; }   // вариант «без таймера»
     const token = ++dm.seqToken;
     dm.running = true;
     const tick = () => {
@@ -1766,10 +1816,15 @@
     tick();
     dm.tickId = setInterval(tick, 250);
   }
+  function tmrInfinity() { $('#dmDrawTime').textContent = '∞'; }
   $('#dmToChecksBtn').addEventListener('click', () => { dmStopEngine(); dmOpenChecks(); });
   $('#dmDrawBack').addEventListener('click', () => {
     if (!confirm('Выйти? Раунд сохранится — продолжить можно позже.')) return;
+    // AUDIT-02: раньше здесь был только dmStopEngine — дедлайн продолжал идти,
+    // и к возвращению время «истекало само». Теперь остаток заморожен и сохранён.
+    if (dm.round && dm.round.phase === 'draw') DMC.freezeDrawDeadline(dm.round, Date.now());
     dmStopEngine();
+    dmSave();
     showScreen('screen-games');
   });
 
@@ -1784,10 +1839,8 @@
   function dmSuspend(reason) {
     if (!dm.round || dm.round.phase === 'done' || !dm.running) return;
     const r = dm.round;
-    if (r.phase === 'draw' && r.drawEndsAt) {
-      r.drawLeft = Math.max(0, Math.ceil((r.drawEndsAt - Date.now()) / 1000));
-      r.drawEndsAt = 0;
-    }
+    // AUDIT-02: заморозка дедлайна в одном месте — чистая функция из ядра DM
+    if (r.phase === 'draw') DMC.freezeDrawDeadline(r, Date.now());
     dmStopEngine();
     dmSave();
     const act = activeScreenId();
@@ -2063,6 +2116,10 @@
   $('#setChosenResetBtn').addEventListener('click', () => {
     state.chosen = {};
     store.set('chosen', state.chosen);
+    // AUDIT-03: уже выбранные задания вычтены из текущих мешков — без пересборки
+    // сброс вступил бы в силу только после исчерпания старой колоды.
+    // blacklist/comboBan не трогаем: их сбрасывает «Вернуть убранные задания»
+    state.bags = {};
     toast('История выпавших сброшена');
   });
   $('#setStatsBtn').addEventListener('click', () => {
@@ -2615,11 +2672,9 @@
     stopTaskTimer();
     stopSpeak();
     clearTimeout(phrase.pairTimer);
-    // DM: дедлайн дорисовки сохраняем (как dmSuspend), сам раунд не уничтожаем
-    if (dm.round && dm.round.phase === 'draw' && dm.round.drawEndsAt) {
-      dm.round.drawLeft = Math.max(0, Math.ceil((dm.round.drawEndsAt - Date.now()) / 1000));
-      dm.round.drawEndsAt = 0;
-    }
+    // AUDIT-02: дедлайн дорисовки DM замораживается той же чистой функцией,
+    // что и во всех остальных выходах; сам раунд не уничтожаем
+    if (dm.round && dm.round.phase === 'draw') DMC.freezeDrawDeadline(dm.round, Date.now());
     dmStopEngine();
     if (dm.round) dmSave();
   }

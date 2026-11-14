@@ -154,9 +154,11 @@ ok(confirmExit.includes('Прогресс круга пропадёт'),
 const stopEngines = between(menuBlock, 'function stopActiveEngines', 'function exitViaMenu');
 ['cancelSpin()', 'stopTaskTimer()', 'stopSpeak()', 'clearTimeout(phrase.pairTimer)', 'dmStopEngine()']
   .forEach(fn => ok(stopEngines.includes(fn), `stopActiveEngines вызывает ${fn}`));
-ok(stopEngines.includes('drawLeft') && stopEngines.includes('drawEndsAt') &&
+/* AUDIT-FIX: расчёт drawLeft/drawEndsAt вынесен в чистую DMC.freezeDrawDeadline
+   (js/draw-memory-core.js) — здесь проверяем вызов, а не дублирующий инлайн */
+ok(stopEngines.includes('DMC.freezeDrawDeadline') &&
    !stopEngines.includes('dm.round = null') && stopEngines.includes('dmSave()'),
-   'Draw Memory: таймер дорисовки сохраняется, раунд не уничтожается');
+   'Draw Memory: дедлайн дорисовки замораживается, раунд не уничтожается');
 
 const menuAll = menuBlock;
 ['store.set(', 'state.players =', 'state.sound', 'state.tts', 'state.punish',

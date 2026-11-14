@@ -180,5 +180,22 @@
     return out.length > cap ? out.slice(out.length - cap) : out;
   }
 
-  root.DRAW_MEMORY_CORE = { normWord, stem, shuffle, plural, pickWords, buildPairs, newScores, reserveNum, applyResult, mergeRecent };
+  /* ── заморозка таймера дорисовки (AUDIT-02): пауза ограниченного таймера ──
+     Остаток от абсолютного дедлайна drawEndsAt переносится в drawLeft,
+     дедлайн обнуляется; возвращает остаток в секундах. Возобновление —
+     в app.js (dmOpenDraw восстанавливает drawEndsAt из drawLeft), при
+     drawLeft === 0 раунд должен уйти в проверки, а не получить «∞».
+     Идемпотентна: дедлайна уже нет (заморожено раньше) — состояние не
+     меняется, возвращается сохранённый drawLeft. Битый раунд — 0. */
+  function freezeDrawDeadline(round, now) {
+    if (!round || typeof round !== 'object') return 0;
+    const left = round.drawEndsAt
+      ? Math.max(0, Math.ceil((round.drawEndsAt - now) / 1000))
+      : Math.max(0, Math.floor(Number(round.drawLeft) || 0));
+    round.drawLeft = left;
+    round.drawEndsAt = 0;
+    return left;
+  }
+
+  root.DRAW_MEMORY_CORE = { normWord, stem, shuffle, plural, pickWords, buildPairs, newScores, reserveNum, applyResult, mergeRecent, freezeDrawDeadline };
 })(typeof window !== 'undefined' ? window : globalThis);
