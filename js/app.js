@@ -4,7 +4,7 @@
 
   const $ = s => document.querySelector(s);
   const DATA = window.FANT;
-  const { decline, guessGender, renderTemplate, speakSafe, choicePreview, detectTimerSecs, wheelPool } = window.FANT_LANG;  // чистые функции из js/lang.js (тестируются на Node)
+  const { decline, guessGender, renderTemplate, speakSafe, choicePreview, detectTimerSecs, wheelPool, pickPhraseTargets } = window.FANT_LANG;  // чистые функции из js/lang.js (тестируются на Node)
   // SPIN-1: высоты строк лент берутся из CSS-переменных — JS и CSS больше не расходятся
   const cssPx = (prop, fallback) => {
     try {
@@ -92,8 +92,16 @@
   /* ── NAV-1: системная кнопка «Назад» ходит по экранам приложения ──
      каждый показ экрана кладёт запись в history; модалки/попапы — свои записи,
      «Назад» закрывает их первым; popstate возвращает на предыдущий экран */
-  let navFromPop = false;   // показ экрана из popstate не кладёт новую запись
-  function showScreen(id) {
+  let navFromPop = false;   // показ экрана из popstate не трогает записи истории
+  /* NAV-2: showScreen(id, { replace }) — два режима записи истории:
+     по умолчанию реальный навигационный переход пушит запись (но только если
+     экран ещё не активен — повторный показ не плодит дубли);
+     { replace: true } — внутренний шаг игрового цикла (выбор → задание →
+     возврат на колесо, пары фразы, фазы DM): текущая запись замещается,
+     стек остаётся на уровне хабов, Back из любой точки цикла ведёт на хаб. */
+  function showScreen(id, opts = {}) {
+    // NAV-2: переход на уже активный экран не создаёт запись и не дёргает DOM
+    if (activeScreenId() === id && !navFromPop) return;
     // SPIN-2/3: уход с экрана колеса гасит прокрутку в любом активном состоянии —
     // WAAPI, RAF, reduced-motion-таймер и отложенный openChoice, не только anim/raf
     if (id !== 'screen-wheel' && (state.spinAnim || state.spinRaf || state.spinRmTimer || state.spinChoiceTimer)) {
@@ -105,15 +113,27 @@
       state.spinning = false;
     }
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
-    if (!navFromPop) { try { history.pushState({ fant: id }, ''); } catch {} }
+    if (navFromPop) { /* запись уже правильная — popstate сам её принёс */ }
+    else if (opts.replace) { try { history.replaceState({ fant: id }, ''); } catch {} }
+    else { try { history.pushState({ fant: id }, ''); } catch {} }
     syncWakeLock();
   }
   const activeScreenId = () => document.querySelector('.screen.active')?.id || '';
   window.addEventListener('popstate', e => {
-    // открытая модалка закрывается первым «Назад», экран не дёргается
+    // NAV-2: модалки не создают записей истории — системный Back при открытой
+    // модалке закрывает её и возвращает в стек запись активного экрана,
+    // чтобы следующее «Назад» не проскакивало мимо текущего экрана
     const modal = document.querySelector('.modal:not(.hidden)');
-    if (modal) { closeModal('#' + modal.id); return; }
-    if (!$('#banPopup').classList.contains('hidden')) { hideBanPopup(); return; }
+    if (modal) {
+      closeModal('#' + modal.id);
+      try { history.pushState({ fant: activeScreenId() }, ''); } catch {}
+      return;
+    }
+    if (!$('#banPopup').classList.contains('hidden')) {
+      hideBanPopup();
+      try { history.pushState({ fant: activeScreenId() }, ''); } catch {}
+      return;
+    }
     const st = e.state || {};
     if (st.fant && st.fant !== activeScreenId()) {
       const act0 = activeScreenId();
@@ -139,13 +159,11 @@
       showScreen(target);
       navFromPop = false;
       if (target !== st.fant) { try { history.replaceState({ fant: target }, ''); } catch {} }
-      // AUDIT-02: возврат на дорисовку продолжает с сохранённого остатка; listen
-      // перерисовывается безопасной паузой, а не застывшим чтением слов
-      if (st.fant === 'screen-dm-draw' && dm.round && dm.round.phase === 'draw') {
-        navFromPop = true; dmOpenDraw(); navFromPop = false;
-      } else if (st.fant === 'screen-dm-listen' && dm.round && dm.round.phase !== 'done') {
-        navFromPop = true; dmOpenListen('hub'); navFromPop = false;
-      }
+      // NAV-2: попали на ФАЗОВЫЙ dm-экран (Back/Forward) — перерисовка по
+      // АКТУАЛЬНОЙ фазе раунда: застывшее чтение слов, дорисовка с мёртвым
+      // дедлайном и чужая проверка не показываются. Настройки (dm-setup) —
+      // обычный экран: Back с фазы ведёт туда, фаза остаётся замороженной
+      if (String(target).startsWith('screen-dm-') && target !== 'screen-dm-setup') dmOnHistory(target);
       // SPY-NAV: «Назад» наружу из режима шпиона выбрасывает незавершённую партию
       // (без confirm — блокировать системную кнопку нельзя), «Назад» внутрь —
       // перерисовывает экран по актуальной фазе, старые состояния не показываются
@@ -303,7 +321,7 @@
     store.set('remaining', state.remaining);
     pending = null;
     renderHud();
-    showScreen('screen-wheel');
+    showScreen('screen-wheel', { replace: true });   // NAV-2: шаг blitz-цикла
     toast(laggards.length
       ? 'Блиц-время! ' + laggards.join(', ') + ' — ' + state.punish
       : 'Блиц-время вышло!');
@@ -693,11 +711,27 @@
     return { text, tpl };
   }
 
+  /* STORE-2: предел истории игрока по типу задания — вычисляется от суммарной
+     базы всех уровней и пакетов с запасом. Прежние фиксированные 80 были меньше
+     совокупной корзины (история общая для уровней и пакетов) и теряли старые
+     задания до исчерпания корзины. Комбо в chosen не пишутся (tpl: null). */
+  const CHOSEN_CAPS = (() => {
+    const caps = { truth: 0, action: 0 };
+    const add = t => {
+      DATA.levels.forEach(lv => { caps[t] += (DATA.tasks[lv.id] && DATA.tasks[lv.id][t]) ? DATA.tasks[lv.id][t].length : 0; });
+      DATA.packs.forEach(p => { caps[t] += (p[t] || []).length; });
+    };
+    add('truth'); add('action');
+    caps.truth += 60; caps.action += 60;   // запас на будущие партии контента
+    return caps;
+  })();
   function markChosen(name, type, text) {
     if (!state.chosen[name]) state.chosen[name] = { truth: [], action: [] };
     if (!state.chosen[name][type].includes(text)) state.chosen[name][type].push(text);
-    // STORE-1: chosen не разрастается бесконечно — старейшие забываются
-    if (state.chosen[name][type].length > 80) state.chosen[name][type].splice(0, state.chosen[name][type].length - 80);
+    // STORE-1/STORE-2: обрезка только сверх вычисленного предела — история не
+    // теряется раньше исчерпания корзины; старые fant.chosen читаются как есть
+    const cap = CHOSEN_CAPS[type];
+    if (cap && state.chosen[name][type].length > cap) state.chosen[name][type].splice(0, state.chosen[name][type].length - cap);
     store.set('chosen', state.chosen);
   }
 
@@ -949,7 +983,7 @@
     $('#actionHint').textContent = (st && st.type === 'action' && st.count === 1)
       ? 'Действие уже выбрано 1 раз подряд. Ещё раз — и в следующий раз его выбрать будет нельзя.' : '';
 
-    showScreen('screen-choice');
+    showScreen('screen-choice', { replace: true });   // NAV-2: шаг хода, не новый экран навигации
     // BAN-1: одноразовая подсказка про долгое нажатие — функция иначе не находится
     if (!store.get('banHint', false)) {
       store.set('banHint', true);
@@ -1056,7 +1090,7 @@
       $('#secretReadBtn').textContent = 'Прочитать задание';
       $('#secretReadBtn').classList.remove('hidden');
       panel.classList.add('hidden');
-      showScreen('screen-reveal');
+      showScreen('screen-reveal', { replace: true });   // NAV-2: шаг хода
       return;
     }
     $('#revealText').classList.remove('hidden');
@@ -1065,7 +1099,7 @@
     $('#ttsBtn').classList.remove('hidden');       // не-секретное задание можно озвучить
     panel.classList.remove('hidden');
     revealSound(isTruth);
-    showScreen('screen-reveal');
+    showScreen('screen-reveal', { replace: true });   // NAV-2: шаг хода
     speak(plain);                       // диктор читает задание
   }
 
@@ -1094,7 +1128,7 @@
         // сводка не на каждом круге, чтобы не надоедала: каждый 3-й
         if (finishedRound % 3 === 0) renderStats('Круг ' + finishedRound + ' завершён');
         startBlitzClock();
-        showScreen('screen-wheel');
+        showScreen('screen-wheel', { replace: true });   // NAV-2: завершение хода — шаг цикла
         return;
       }
       toast(name + ' выпадает до следующего круга. Осталось: ' + state.remaining.length);
@@ -1106,7 +1140,7 @@
     }
     store.set('stats', state.stats);
     renderHud();
-    showScreen('screen-wheel');
+    showScreen('screen-wheel', { replace: true });   // NAV-2: завершение хода — шаг цикла
   }
 
   $('#btnDone').addEventListener('click', () => completeTask(true));
@@ -1347,12 +1381,14 @@
 
   function showPhrasePrompt() {
     const tpl = drawPrompt();
-    // отвечающий импровизирует ПРО других: цель — случайный игрок, но не сам отвечающий
-    const others = state.players.filter(p => p !== phrase.current.answerer);
-    const who = others[Math.floor(Math.random() * others.length)];
-    const pool2 = others.filter(p => p !== who);
-    const other = pool2[Math.floor(Math.random() * pool2.length)] || who;
-    const r = rt(tpl, who, other);
+    // PHRASE-5/6: цели выбирает чистая функция FANT_LANG.pickPhraseTargets —
+    // фразы с тегом [[о себе]] адресуют {name} самому отвечающему, обычные —
+    // третьему игроку; {other} при двух игроках — второй, без дублей who.
+    // Тег вырезается до показа/озвучки/превью.
+    const picked = pickPhraseTargets(tpl, phrase.current.answerer, state.players);
+    const who = picked.who;
+    const other = picked.other;   // PHRASE-6: функция гарантирует other ≠ who при ≥2 игроках
+    const r = rt(picked.template, who, other);
     $('#phTaskMeta').textContent = phrase.current.reader + ' читает · фраза ' + (phrase.qInPair + 1) + ' из ' + phrase.per;
     $('#phTaskText').innerHTML = r.html;
     state.currentPlain = r.plain;
@@ -1364,7 +1400,7 @@
     $('#ratePanel').classList.add('hidden');
     // PHRASE-1: очки получает отвечающий — подсказка говорит честно, за кого оценка
     $('.rate-hint').textContent = 'Оценка зала за ответы ' + phrase.current.answerer;
-    showScreen('screen-phrase-task');
+    showScreen('screen-phrase-task', { replace: true });   // NAV-2: фраза — шаг пары
   }
 
   $('#phraseGoBtn').addEventListener('click', () => {
@@ -1413,7 +1449,7 @@
       $('#ratePanel').classList.add('hidden');
       if (!phrase.queue.length) return showPhResults();
       resetPairScreen();
-      showScreen('screen-phrase-round');
+      showScreen('screen-phrase-round', { replace: true });   // NAV-2: следующая пара — шаг круга
     }
   });
 
@@ -1457,7 +1493,7 @@
     $('#phLoser').innerHTML =
       (winners.length ? 'Лучший результат — <b>' + winners.map(w => esc(w.nm)).join(' и ') + '</b> (' + max + '). ' : '') +
       'Последнее место — <b>' + losers.map(l => esc(l.nm)).join(' и ') + '</b>: ' + esc(state.punish);
-    showScreen('screen-phrase-results');
+    showScreen('screen-phrase-results', { replace: true });   // NAV-2: итог круга — шаг, Back ведёт на setup
     vibrate([60, 60, 140]);
   }
 
@@ -1655,7 +1691,7 @@
   }
 
   /* ── экран слушания (brief — инструкция, hub — пауза раунда) ── */
-  function dmOpenListen(mode) {
+  function dmOpenListen(mode, opts = {}) {
     const r = dm.round;
     $('#dmListenBtn').classList.add('hidden');
     $('#dmNewRoundBtn').classList.add('hidden');
@@ -1793,7 +1829,7 @@
     // время вышло, пока раунд был на паузе: к проверкам, а не «∞»
     const timed = dm.settings.drawSecs > 0;
     dmSave();
-    showScreen('screen-dm-draw');
+    showScreen('screen-dm-draw', { replace: true });   // NAV-2: дорисовка — шаг раунда
     if (!r.drawEndsAt) {
       if (timed) return dmOpenChecks();   // ограниченный таймер не превращается в бесконечный
       tmrInfinity();                      // вариант «без таймера»
@@ -1845,9 +1881,35 @@
     dmSave();
     const act = activeScreenId();
     if (act === 'screen-dm-listen' || act === 'screen-dm-draw') {
-      dmOpenListen('hub');   // безопасное состояние вместо «застывшего» экрана
+      dmOpenListen('hub', { replace: true });   // NAV-2: пауза — шаг раунда, вместо «застывшего» экрана
     }
     if (reason) toast(reason);
+  }
+
+  /* ── NAV-2: системный Back/Forward попал на dm-экран — показываем АКТУАЛЬНОЕ
+     состояние раунда, а не застывший DOM прошлой фазы. Раунда нет — dm-экраны
+     недоступны (ведём на games); раунд завершён — только результаты. ── */
+  function dmOnHistory(targetId) {
+    const r = dm.round;
+    if (!r) {
+      try { history.replaceState({ fant: 'screen-games' }, ''); } catch {}   // запись dm-экрана не валидна без раунда
+      navFromPop = true; showScreen('screen-games'); navFromPop = false;
+      return;
+    }
+    if (r.phase === 'done') {
+      if (targetId !== 'screen-dm-results') {
+        navFromPop = true; showScreen('screen-dm-results'); navFromPop = false;   // DOM результатов актуален
+      }
+      return;
+    }
+    navFromPop = true;
+    if (r.phase === 'listen') dmOpenListen('hub');        // безопасная пауза, слова заново не читаются
+    else if (r.phase === 'draw') dmOpenDraw();            // таймер продолжится с сохранённого остатка
+    else if (r.phase === 'checks') {
+      if (targetId === 'screen-dm-check' && dmCurrentIdx() >= 0) dmOpenCheck(dmCurrentIdx());   // текущая проверка
+      else dmOpenChecks();
+    }
+    navFromPop = false;
   }
 
   /* ── проверки: по одной паре за раз (DM-SEQ) ──
@@ -1863,7 +1925,7 @@
     r.phase = 'checks'; dmSave();
     if (dmCurrentIdx() < 0) return dmOpenResults();   // все проверки закрыты
     dmRenderChecks();
-    showScreen('screen-dm-checks');
+    showScreen('screen-dm-checks', { replace: true });   // NAV-2: проверки — шаг раунда
   }
   function dmRenderChecks() {
     const r = dm.round;
@@ -1914,7 +1976,7 @@
       dmSave();
     }
     dmRenderCheck();
-    showScreen('screen-dm-check');
+    showScreen('screen-dm-check', { replace: true });   // NAV-2: карточка проверки — шаг
   }
   function dmRenderCheck() {
     const r = dm.round, i = dm.checkIdx;
@@ -2007,7 +2069,7 @@
       : 'Ни одного балла — победителя нет';
     $('#dmHistory').classList.add('hidden');
     $('#dmHistToggle').textContent = 'История проверок';
-    showScreen('screen-dm-results');
+    showScreen('screen-dm-results', { replace: true });   // NAV-2: итоги раунда — шаг, Back ведёт наружу
     vibrate([60, 60, 140]);
   }
   const DM_RESULT_LABEL = { answerer: 'баллы отвечающему', asker: 'баллы задающему', none: 'никому' };
@@ -2037,13 +2099,15 @@
     dmSuspend('Раунд приостановлен');   // DM-1: меню поверх чтения слов не оставляет их играть в фоне
     $(sel).classList.remove('hidden');
     setAppInert(true);
-    try { history.pushState({ fant: activeScreenId(), modal: sel.slice(1) }, ''); } catch {}
+    // NAV-2: модалка не создаёт записи — закрытие любым способом (крестик,
+    // подложка, Escape, системный Back) не оставляет пустых нажатий «Назад»
     const f = $(sel).querySelector('button:not(.hidden), input');
     if (f) f.focus();
   }
   function closeModal(sel) {
     $(sel).classList.add('hidden');
     setAppInert(false);
+    // NAV-2: модалка записи не имела — закрытие не трогает историю вовсе
     if (modalOpener && modalOpener.focus) modalOpener.focus();
     modalOpener = null;
   }
@@ -2184,12 +2248,13 @@
     p.style.top = Math.max(60, Math.min(y - 30, window.innerHeight - h - 10)) + 'px';
     p.classList.remove('hidden');
     setAppInert(true);
-    try { history.pushState({ fant: activeScreenId(), modal: 'banPopup' }, ''); } catch {}
+    // NAV-2: всплывашка записи не создаёт (как модалки)
   }
   function hideBanPopup() {
     banOpen = false;
     $('#banPopup').classList.add('hidden');
     setAppInert(false);
+    // NAV-2: всплывашка записи не имела — закрытие не трогает историю
   }
   ['choiceTruth', 'choiceAction'].forEach(id => {
     const card = $('#' + id);

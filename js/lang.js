@@ -158,5 +158,36 @@
     return idx;
   }
 
-  root.FANT_LANG = { esc, decline, guessGender, renderTemplate, speakSafe, choicePreview, detectTimerSecs, wheelPool };
+  /* ── PHRASE-5/6: выбор целей фразы — чистая функция с инъекцией rnd ──
+     • шаблон с тегом [[о себе]] адресует {name} самому отвечающему; тег
+       вырезается из возвращённого шаблона глобально — в HTML, превью и TTS
+       сырой тег не попадёт никогда;
+     • обычный шаблон: who — случайный игрок, не отвечающий;
+     • other — ещё один участник, отличный от who (независимо от того, каким
+       токеном шаблон его использует: {other}, {other-acc}, {other-dat}…);
+       при двух игроках other = второй игрок (PHRASE-6: дубля who не будет);
+       при одном игроке other = who — деградация, в приложении недостижима
+       (минимум 2 игрока), но без undefined;
+     • rnd — функция [0,1) для детерминированных тестов.
+     Возвращает { who, other, template } — template уже без тега. */
+  function pickPhraseTargets(template, answerer, players, rnd = Math.random) {
+    const list = Array.isArray(players) && players.length ? players : (answerer != null ? [answerer] : []);
+    const self = template.includes('[[о себе]]');
+    const clean = template.replace(/\[\[о себе\]\]\s*/g, '').trim();
+    const pickFrom = pool => (pool.length ? pool[Math.floor(rnd() * pool.length) % pool.length] : null);
+    let who;
+    if (self) {
+      who = list.includes(answerer) ? answerer : pickFrom(list);
+    } else {
+      const pool = list.filter(p => p !== answerer);
+      who = pickFrom(pool.length ? pool : list);   // 1 игрок: некому импровизировать — берём его же
+    }
+    // PHRASE-6: other — всегда отличный от who участник, если он существует;
+    // при 2 игроках это второй (может быть отвечающим), дубля who нет
+    const otherPool = list.filter(p => p !== who);
+    const other = otherPool.length ? pickFrom(otherPool) : who;
+    return { who, other, template: clean };
+  }
+
+  root.FANT_LANG = { esc, decline, guessGender, renderTemplate, speakSafe, choicePreview, detectTimerSecs, wheelPool, pickPhraseTargets };
 })(typeof window !== 'undefined' ? window : globalThis);
