@@ -255,6 +255,44 @@ for (let sim = 0; sim < 200; sim++) {
   ok(Object.keys(DMC).every(k => typeof DMC[k] === 'function'), 'в ядре только функции — хранилищем не занимается');
 }
 
+/* ── AUDIT-02: freezeDrawDeadline — пауза таймера дорисовки ──
+   Замороженный контракт (менеджер): чистая функция в DRAW_MEMORY_CORE.
+   Если round.drawEndsAt задан — drawLeft = max(0, ceil((drawEndsAt - now)/1000)),
+   drawEndsAt обнуляется, возвращается остаток. Идемпотентна: без drawEndsAt — null,
+   drawLeft не трогается. round=null → null. Пока агент приложения не влил ветку —
+   блок честно пропускается с пометкой SKIP (не маскируя будущий провал). */
+{
+  const freeze = typeof DMC.freezeDrawDeadline === 'function' ? DMC.freezeDrawDeadline : null;
+  if (!freeze) {
+    console.log('SKIP: DMC.freezeDrawDeadline ещё не интегрирована (контракт заморожен, ждём agent/auditfix-app)');
+  } else {
+    const now = 1_700_000_000_000;
+    // обычная заморозка: ceil от остатка, дедлайн сброшен, остаток возвращён
+    let r = { drawEndsAt: now + 30_500 };
+    eq(freeze(r, now), 31, 'freezeDrawDeadline возвращает ceil((drawEndsAt - now)/1000)');
+    eq(r.drawLeft, 31, 'freezeDrawDeadline записывает drawLeft');
+    eq(r.drawEndsAt, 0, 'freezeDrawDeadline сбрасывает drawEndsAt');
+    // ровный остаток без дробной части
+    r = { drawEndsAt: now + 30_000 };
+    eq(freeze(r, now), 30, 'freezeDrawDeadline при ровных секундах не завышает остаток');
+    // истёкший дедлайн: остаток 0, таймер не превращается в бесконечный
+    r = { drawEndsAt: now - 5_000 };
+    eq(freeze(r, now), 0, 'freezeDrawDeadline у истёкшего дедлайна возвращает 0');
+    eq(r.drawLeft, 0, 'freezeDrawDeadline у истёкшего дедлайна записывает drawLeft = 0');
+    eq(r.drawEndsAt, 0, 'freezeDrawDeadline у истёкшего дедлайна сбрасывает drawEndsAt');
+    // идемпотентность: второй вызов по уже замороженному раунду ничего не меняет
+    r = { drawEndsAt: now + 60_000 };
+    eq(freeze(r, now), 60, 'первая заморозка возвращает остаток');
+    eq(freeze(r, now), null, 'повторная заморозка (drawEndsAt уже 0) возвращает null');
+    eq(r.drawLeft, 60, 'повторная заморозка не портит сохранённый drawLeft');
+    eq(r.drawEndsAt, 0, 'повторная заморозка оставляет drawEndsAt = 0');
+    // null и объекты без дедлайна
+    eq(freeze(null, now), null, 'freezeDrawDeadline(null) → null');
+    eq(freeze({}, now), null, 'freezeDrawDeadline без полей → null');
+    eq(freeze({ drawLeft: 10 }, now), null, 'объект без drawEndsAt, но с drawLeft → null, drawLeft не тронут');
+  }
+}
+
 /* ── mergeRecent ── */
 {
   let rec = DMC.mergeRecent([], ['а', 'б']);
