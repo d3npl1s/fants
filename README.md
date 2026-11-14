@@ -164,6 +164,7 @@ node tests/spy-core.test.js     # правила «Шпиона» (детерм�
 node tests/spy-ui-smoke.test.js # статическая интеграция «Шпиона» (подключение, CORE, API)
 node tests/spy-layout.test.js   # мобильная вёрстка «Шпиона» (скролл настроек, «Пропустить»)
 node tests/global-menu.test.js  # общее меню (контекстность, безопасный выход, точки)
+node tests/auditfix-static.test.js # регрессии аудита: Back-история фантов/фраз, guard оценки, сброс мешков
 for f in js/*.js tests/*.js; do node --check "$f"; done   # синтаксис
 ```
 
