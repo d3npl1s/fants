@@ -37,6 +37,7 @@ jobs:
           node tests/spy-ui-smoke.test.js
           node tests/spy-layout.test.js
           node tests/global-menu.test.js
+          node tests/auditfix-static.test.js
       - name: Синтаксис JS
         run: for f in js/*.js tests/*.js; do node --check "$f"; done
 
