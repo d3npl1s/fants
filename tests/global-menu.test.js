@@ -179,8 +179,8 @@ ok(/\.topbar\s*\{[^}]*safe-area-inset-top/.test(style),
 
 /* ── 10. Версия согласована (интегратор бампает одним релизным коммитом) ── */
 const ver = (sw.match(/const VERSION = '([\d.]+)';/) || [])[1];
-ok(ver === '1.8.3', 'sw.js: VERSION 1.8.3');
-ok(html.includes('?v=' + ver) && html.includes('версия 1.8.3'),
+ok(ver === '1.8.4', 'sw.js: VERSION 1.8.4');
+ok(html.includes('?v=' + ver) && html.includes('версия 1.8.4'),
    'index.html: ?v= и main-ver совпадают с VERSION');
 
 console.log('Global menu: ' + n + ' проверок пройдено');
