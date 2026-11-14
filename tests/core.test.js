@@ -258,5 +258,101 @@ eq(Object.values(COUNTS.phrases).reduce((a, b) => a + b, 0), COUNTS.phrasesTotal
 eq(Object.values(PHRASE.prompts).reduce((a, arr) => a + arr.length, 0), COUNTS.phrasesTotal, `фразы = ${COUNTS.phrasesTotal} (как в README)`);
 ok(FANT.packs.length === 3 && FANT.packs.every(p => p.truth.length && p.action.length), 'пакеты на месте (3, непустые)');
 
+/* ── PHRASE-5/6: pickPhraseTargets — чистый выбор целей фразы (SKIP до интеграции) ──
+   Замороженный менеджером контракт (предложен тестами, сверить при интеграции
+   с агентом приложения): чистая функция-член FANT_LANG в js/lang.js с инъекцией
+   rnd — pickPhraseTargets(template, answerer, players, rnd) → { who, other, template },
+   где who/other — имена из players; template — исходный шаблон без тега [[о себе]];
+   other === null, если шаблон не использует {other}. Поведение:
+   • [[о себе]] → who === answerer (текст обращён к самому отвечающему);
+   • обычная → who !== answerer;
+   • при 2 игроках и {other} в шаблоне → other === второй игрок, who !== other
+     (PHRASE-6: никакого «other = who»);
+   • при 3+ игроках → who, other и answerer попарно различны;
+   • тег [[о себе]] не возвращается сырым ни в template, ни в рендере
+     (renderTemplate/speakSafe) — попадание тега в HTML/preview/TTS невозможно;
+   • недостаток игроков — без undefined: who всегда валидное имя.
+   Пока агент приложения не влил ветку — блок честно пропускается с пометкой
+   SKIP (не маскируя будущий провал); если реализация появится под другим именем,
+   SKIP-вывод подскажет имя для сверки контракта. */
+{
+  const FANT_LANG = window.FANT_LANG;
+  const CANDIDATES = ['pickPhraseTargets', 'choosePhraseTargets', 'phraseTargets'];
+  const pick = CANDIDATES.find(cn => typeof FANT_LANG[cn] === 'function');
+  if (!pick) {
+    console.log('SKIP: FANT_LANG.pickPhraseTargets ещё не интегрирована (контракт заморожен, ждём agent/auditfix2-app)');
+  } else {
+    if (pick !== 'pickPhraseTargets') {
+      console.log(`ВНИМАНИЕ: функция целей найдена как FANT_LANG.${pick} — сверить имя контракта с тестом`);
+    }
+    const P4 = ['Аня', 'Боря', 'Вика', 'Гоша'];
+    const SELF = '[[о себе]] Каким своим талантом ты гордишься, {name}?';
+    const PAIR = '{name}, если бы вы с {other} попали в лифт, что бы вы там обсуждали?';
+    const rndAt = k => () => k;                       // фиксированное значение rnd
+
+    // self-фраза: {name} адресуется отвечающему
+    {
+      const r = FANT_LANG[pick](SELF, 'Боря', P4, rndAt(0));
+      eq(r.who, 'Боря', '[[о себе]]: who = отвечающий');
+      eq(r.template.includes('[[о себе]]'), false, '[[о себе]]: тег удалён из возвращённого шаблона');
+    }
+    // обычная фраза: {name} — не отвечающий
+    {
+      const r = FANT_LANG[pick](PAIR, 'Боря', P4, rndAt(0));
+      ok(r.who !== 'Боря', 'обычная фраза: who !== отвечающего');
+      ok(r.template.includes('[[о себе]]') === false, 'обычная фраза: тег не добавляется');
+    }
+    // 2 игрока: other — второй игрок, дубли «other = who» нет (PHRASE-6)
+    {
+      const P2 = ['Аня', 'Боря'];
+      const r1 = FANT_LANG[pick](PAIR, 'Аня', P2, rndAt(0));   // обычная
+      eq(r1.who, 'Боря', '2 игрока, обычная: who = второй игрок');
+      eq(r1.other, 'Аня', '2 игрока, обычная: other = второй игрок (не дубль who)');
+      ok(r1.who !== r1.other, '2 игрока, обычная: {name} и {other} различны');
+      const r2 = FANT_LANG[pick](SELF, 'Аня', P2, rndAt(0));   // о себе
+      eq(r2.who, 'Аня', '2 игрока, [[о себе]]: who = отвечающий');
+      ok(r2.other !== r2.who, '2 игрока, [[о себе]]: other !== who');
+    }
+    // 3 игрока: who, other и отвечающий попарно различны
+    {
+      const P3 = ['Аня', 'Боря', 'Вика'];
+      const r = FANT_LANG[pick](PAIR, 'Боря', P3, rndAt(0));
+      ok(r.who !== 'Боря' && r.other !== 'Боря', '3 игрока: who и other — не отвечающий');
+      ok(r.who !== r.other, '3 игрока: who !== other');
+      ok(P3.includes(r.who) && (r.other === null || P3.includes(r.other)), '3 игрока: цели из списка игроков');
+    }
+    // 5 игроков: перебор rnd — пул who не вырожден, other различен и валиден
+    {
+      const P5 = P4.concat(['Даша']);
+      const whos = new Set(), others = new Set();
+      for (let k = 0; k < 20; k++) {
+        const r = FANT_LANG[pick](PAIR, 'Боря', P5, rndAt(k / 20));
+        ok(r.who !== 'Боря', `5 игроков, rnd=${k / 20}: who !== отвечающего`);
+        ok(r.who !== r.other, `5 игроков, rnd=${k / 20}: who !== other`);
+        ok(r.other !== 'Боря' && P5.includes(r.other), `5 игроков, rnd=${k / 20}: other валиден и не отвечающий`);
+        whos.add(r.who);
+        others.add(r.other);
+      }
+      ok(whos.size >= 2, `5 игроков: выбор who не вырожден при разных rnd (получено ${whos.size})`);
+      ok(others.size >= 2, `5 игроков: other различен при разных rnd (получено ${others.size})`);
+    }
+    // тег не попадает сырым в рендер и озвучку (HTML/preview/TTS)
+    {
+      const r = FANT_LANG[pick](SELF, 'Вика', P4, rndAt(0));
+      const out = renderTemplate(r.template, r.who, r.other || r.who);
+      ok(out.html.includes('[[о себе]]') === false, 'тег отсутствует в HTML');
+      ok(out.plain.includes('[[о себе]]') === false, 'тег отсутствует в plain (preview)');
+      ok(speakSafe(out.plain).includes('[[о себе]]') === false, 'тег отсутствует в TTS-тексте');
+    }
+    // недостаток игроков: без undefined, без дубля там, где он не задуман
+    {
+      const r = FANT_LANG[pick](SELF, 'Аня', ['Аня'], rndAt(0));
+      ok(typeof r.who === 'string' && r.who.length > 0, '1 игрок: who — валидная строка, не undefined');
+      const r2 = FANT_LANG[pick](PAIR, 'Аня', ['Аня'], rndAt(0));
+      ok(typeof r2.who === 'string' && r2.who.length > 0, '1 игрок + {other}: who — валидная строка, не undefined');
+    }
+  }
+}
+
 console.log(fails ? `\n${fails}/${n} упало` : `OK: ${n} проверок пройдено`);
 process.exit(fails ? 1 : 0);
